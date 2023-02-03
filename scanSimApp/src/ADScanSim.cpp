@@ -499,7 +499,10 @@ asynStatus ADScanSim::openScan(const char* filePath){
         return asynError;
     }
 
-    this->image_dset = H5Dopen(file, "/img_tomo", H5P_DEFAULT);
+    const char imageDataset[256];
+    getStringParam(ADScanSim_ImageDataset, 256, (char*) imageDataset);
+
+    this->image_dset = H5Dopen(file, imageDataset, H5P_DEFAULT);
     //this->ts_dset = H5Dopen(file, "/entry/instrument/NDAttributes/NDArrayTimeStamp", H5P_DEFAULT);
     //this->cm_dset = H5Dopen(file, "/entry/instrument/detector/NDAttributes/ColorMode", H5P_DEFAULT);
     //this->uid_dset = H5Dopen(file, "/entry/instrument/NDAttributes/NDArrayUniqueId", H5P_DEFAULT);
@@ -631,10 +634,12 @@ ADScanSim::ADScanSim(const char* portName, int maxBuffers, size_t maxMemory, int
     createParam(ADScanSim_PlaybackRateFPSString, asynParamFloat64, &ADScanSim_PlaybackRateFPS);
     createParam(ADScanSim_PlaybackRateSPFString, asynParamFloat64, &ADScanSim_PlaybackRateSPF);
     createParam(ADScanSim_ScanFilePathString, asynParamOctet, &ADScanSim_ScanFilePath);
+    createParam(ADScanSim_ImageDatasetString, asynParamOctet, &ADScanSim_ImageDataset);
+    createParam(ADScanSim_TSDatasetString, asynParamOctet, &ADScanSim_TSDataset);
     createParam(ADScanSim_AutoRepeatString, asynParamInt32, &ADScanSim_AutoRepeat);
     createParam(ADScanSim_ScanLoadedString, asynParamInt32, &ADScanSim_ScanLoaded);
     createParam(ADScanSim_PlaybackPosString, asynParamInt32, &ADScanSim_PlaybackPos);
-    createParam(ADScanSim_ResetPlaybackPosString, asynParamInt32, &ADScanSimResetPlaybackPos);
+    createParam(ADScanSim_ResetPlaybackPosString, asynParamInt32, &ADScanSim_ResetPlaybackPos);
     createParam(ADScanSim_NumFramesString, asynParamInt32, &ADScanSim_NumFrames);
 
     // Sets driver version PV (version numbers defined in header file) 

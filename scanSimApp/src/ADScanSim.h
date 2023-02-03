@@ -30,6 +30,8 @@
 #define ADScanSim_PlaybackRateFPSString          "PLAYBACK_RATE_FPS"            //
 #define ADScanSim_PlaybackRateSPFString          "PLAYBACK_RATE_SPF"            //
 #define ADScanSim_ScanFilePathString          "SCAN_FILE_PATH"            //
+#define ADScanSim_ImageDatasetString          "IMAGE_DATASET"            //
+#define ADScanSim_TSDatasetString          "TS_DATASET"            //
 #define ADScanSim_AutoRepeatString            "AUTO_REPEAT"            //
 #define ADScanSim_ScanLoadedString            "SCAN_LOADED"            //
 #define ADScanSim_PlaybackPosString    "PLAYBACK_POS"
@@ -82,6 +84,8 @@ class ADScanSim : ADDriver{
         #define ADSCANSIM_FIRST_PARAM ADScanSim_PlaybackRateFPS
         int ADScanSim_PlaybackRateSPF;
         int ADScanSim_ScanFilePath;
+        int ADScanSim_ImageDataset;
+        int ADScanSim_TSDataset;
         int ADScanSim_AutoRepeat;
         int ADScanSim_ScanLoaded;
         int ADScanSim_PlaybackPos;
