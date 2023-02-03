@@ -2,3 +2,12 @@
 *~
 .vscode/
 TemplateReadme.md
+O.*
+db/
+dbd/
+include/
+lib/
+bin/
+*.swp
+envPaths
+autosave/
