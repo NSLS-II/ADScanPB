@@ -381,6 +381,8 @@ asynStatus ADScanSim::writeInt32(asynUser* pasynUser, epicsInt32 value){
         if(!value && acquiring){
             status = acquireStop();
         }
+    } else if(function == ADScanSim_ResetPlaybackPos) {
+        setIntegerParam(ADScanSim_PlaybackPos, 0);
     } else if(function == ADImageMode){
         if(acquiring == 1) acquireStop();
     } else if(function == NDDataType || function == NDColorMode){
@@ -632,6 +634,7 @@ ADScanSim::ADScanSim(const char* portName, int maxBuffers, size_t maxMemory, int
     createParam(ADScanSim_AutoRepeatString, asynParamInt32, &ADScanSim_AutoRepeat);
     createParam(ADScanSim_ScanLoadedString, asynParamInt32, &ADScanSim_ScanLoaded);
     createParam(ADScanSim_PlaybackPosString, asynParamInt32, &ADScanSim_PlaybackPos);
+    createParam(ADScanSim_ResetPlaybackPosString, asynParamInt32, &ADScanSimResetPlaybackPos);
     createParam(ADScanSim_NumFramesString, asynParamInt32, &ADScanSim_NumFrames);
 
     // Sets driver version PV (version numbers defined in header file) 

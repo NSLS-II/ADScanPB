@@ -33,6 +33,7 @@
 #define ADScanSim_AutoRepeatString            "AUTO_REPEAT"            //
 #define ADScanSim_ScanLoadedString            "SCAN_LOADED"            //
 #define ADScanSim_PlaybackPosString    "PLAYBACK_POS"
+#define ADScanSim_ResetPlaybackPosString "RESET_PLAYBACK_POS"
 #define ADScanSim_NumFramesString             "NUM_FRAMES"            //
 
 
@@ -84,6 +85,7 @@ class ADScanSim : ADDriver{
         int ADScanSim_AutoRepeat;
         int ADScanSim_ScanLoaded;
         int ADScanSim_PlaybackPos;
+        int ADScanSim_ResetPlaybackPos;
         int ADScanSim_NumFrames;
         #define ADSCANSIM_LAST_PARAM ADScanSim_NumFrames
 

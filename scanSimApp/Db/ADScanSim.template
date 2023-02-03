@@ -24,7 +24,7 @@ include "ADBase.template"
 record(ao, "$(P)$(R)PlaybackRateFPS"){
     field(PINI, "YES")
     field(DTYP, "asynFloat64")
-    field(VAL, "10")
+    field(VAL, "5")
     field(OUT,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PLAYBACK_RATE_FPS")
 }
 
@@ -37,6 +37,7 @@ record(ai, "$(P)$(R)PlaybackRateFPS_RBV"){
 record(ao, "$(P)$(R)PlaybackRateSPF"){
     field(PINI, "YES")
     field(DTYP, "asynFloat64")
+    field(VAL, "0.2")
     field(OUT,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PLAYBACK_RATE_SPF")
 }
 
