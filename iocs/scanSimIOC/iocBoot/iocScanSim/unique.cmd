@@ -10,12 +10,17 @@ epicsEnvSet("PORT",                     "SCANSIM1")
 epicsEnvSet("IOC",                      "iocScanSim")
 
 epicsEnvSet("EPICS_CA_AUTO_ADDR_LIST",  "NO")
-epicsEnvSet("EPICS_CA_ADDR_LIST",       "255.255.255.0")
+epicsEnvSet("EPICS_CA_ADDR_LIST",       "127.0.0.255")
+epicsEnvSet("EPICS_CAS_AUTO_BEACON_ADDR_LIST", "NO")           
+epicsEnvSet("EPICS_CAS_BEACON_ADDR_LIST",      "127.0.0.255") 
+epicsEnvSet("EPICS_CAS_INTF_ADDR_LIST",        "127.0.0.1") 
+
+
 epicsEnvSet("EPICS_CA_MAX_ARRAY_BYTES", "6000000")
 
 
 # PV and IOC Name configs
-epicsEnvSet("PREFIX",                   "DEV:SCANSIM-DET:1")
+epicsEnvSet("PREFIX",                   "DEV:SCANSIM-DET1:")
 epicsEnvSet("HOSTNAME",                 "localhost")
 epicsEnvSet("IOCNAME",                  "scanSim")
 

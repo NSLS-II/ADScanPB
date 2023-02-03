@@ -5,7 +5,7 @@ errlogInit(20000)
 < envPaths
 
 #epicsThreadSleep(20)
-dbLoadDatabase("$(ADScanSim)/iocs/scanSimIOC/dbd/scanSimApp.dbd")
+dbLoadDatabase("$(ADSCANSIM)/iocs/scanSimIOC/dbd/scanSimApp.dbd")
 scanSimApp_registerRecordDeviceDriver(pdbbase) 
 
 #/*
@@ -29,14 +29,14 @@ scanSimApp_registerRecordDeviceDriver(pdbbase)
 # epicsThreadSleep(2)
 
 # If searching for device by product ID put "" or empty string for serial number
-ADScanSimConfig("$(PORT)", $(CAM-CONNECT), 0, 0, 0, 0)
+ADScanSimConfig("$(PORT)", 0, 0, 0, 0)
 epicsThreadSleep(2)
 
 asynSetTraceIOMask($(PORT), 0, 2)
 #asynSetTraceMask($(PORT),0,0xff)
 
 dbLoadRecords("$(ADCORE)/db/ADBase.template", "P=$(PREFIX),R=cam1:,PORT=$(PORT),ADDR=0,TIMEOUT=1")
-dbLoadRecords("$(ADScanSim)/db/ADScanSim.template","P=$(PREFIX),R=cam1:,PORT=$(PORT),ADDR=0,TIMEOUT=1")
+dbLoadRecords("$(ADSCANSIM)/db/ADScanSim.template","P=$(PREFIX),R=cam1:,PORT=$(PORT),ADDR=0,TIMEOUT=1")
 
 #
 # Create a standard arrays plugin, set it to get data from Driver.
@@ -52,7 +52,7 @@ dbLoadRecords("$(ADCORE)/db/NDStdArrays.template", "P=$(PREFIX),R=image1:,PORT=I
 < $(ADCORE)/iocBoot/commonPlugins.cmd
 #
 
-set_requestfile_path("$(ADScanSim)/scanSimApp/Db")
+set_requestfile_path("$(ADSCANSIM)/scanSimApp/Db")
 
 #asynSetTraceMask($(PORT),0,0x09)
 #asynSetTraceMask($(PORT),0,0x11)
