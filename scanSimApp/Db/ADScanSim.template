@@ -18,3 +18,107 @@
 # example: #define ADDRIVERNAMESTANDARD "PV_NAME"
 #
 ##################################################################
+
+include "ADBase.template"
+
+record(ao, "$(P)$(R)PlaybackRateFPS"){
+    field(PINI, "YES")
+    field(DTYP, "asynFloat64")
+    field(VAL, "10")
+    field(OUT,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PLAYBACK_RATE_FPS")
+}
+
+record(ai, "$(P)$(R)PlaybackRateFPS_RBV"){
+    field(DTYP, "asynFloat64")
+    field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PLAYBACK_RATE_FPS")
+    field(SCAN, "I/O Intr")
+}
+
+record(ao, "$(P)$(R)PlaybackRateSPF"){
+    field(PINI, "YES")
+    field(DTYP, "asynFloat64")
+    field(OUT,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PLAYBACK_RATE_SPF")
+}
+
+record(ai, "$(P)$(R)PlaybackRateSPF_RBV"){
+    field(DTYP, "asynFloat64")
+    field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PLAYBACK_RATE_SPF")
+    field(SCAN, "I/O Intr")
+}
+
+record(waveform, "$(P)$(R)ScanFilePath")
+{
+    field(PINI, "YES")
+    field(DTYP, "asynOctetWrite")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))SCAN_FILE_PATH")
+    field(FTVL, "CHAR")
+    field(NELM, "256")
+    info(autosaveFields, "VAL")
+}
+
+record(waveform, "$(P)$(R)ScanFilePath_RBV")
+{
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))SCAN_FILE_PATH")
+    field(FTVL, "CHAR")
+    field(NELM, "256")
+    field(SCAN, "I/O Intr")
+}
+
+record(bo, "$(P)$(R)AutoRepeat")
+{
+    field(PINI, "YES")
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))AUTO_REPEAT")
+    field(VAL,  "1")
+    field(ZNAM, "No")
+    field(ONAM, "Yes")
+    info(autosaveFields, "VAL")
+}
+
+record(bi, "$(P)$(R)AutoRepeat_RBV")
+{
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))AUTO_REPEAT")
+    field(ZNAM, "No")
+    field(ONAM, "Yes")
+    field(SCAN, "I/O Intr")
+}
+
+record(bi, "$(P)$(R)ScanLoaded_RBV")
+{
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))SCAN_LOADED")
+    field(ZNAM, "No")
+    field(ONAM, "Yes")
+    field(SCAN, "I/O Intr")
+}
+
+
+record(ai, "$(P)$(R)NumFrames_RBV"){
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))NUM_FRAMES")
+    field(SCAN, "I/O Intr")
+}
+
+record(ao, "$(P)$(R)PlaybackPosition"){
+    field(PINI, "YES")
+    field(DTYP, "asynInt32")
+    field(VAL, "0")
+    field(OUT,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PLAYBACK_POS")
+}
+
+record(ai, "$(P)$(R)PlaybackPosition_RBV"){
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PLAYBACK_POS")
+    field(SCAN, "I/O Intr")
+}
+
+
+record(bo, "$(P)$(R)ResetPlaybackPosition")
+{
+    field(PINI, "YES")
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))RESET_PLAYBACK_POS")
+    field(VAL,  "0")
+}

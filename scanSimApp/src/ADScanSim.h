@@ -17,13 +17,23 @@
 #define ADSCANSIM_H
 
 // version numbers
-#define ADScanSim_VERSION      0
-#define ADScanSim_REVISION     0
-#define ADScanSim_MODIFICATION 0
+#define ADSCANSIM_VERSION      0
+#define ADSCANSIM_REVISION     0
+#define ADSCANSIM_MODIFICATION 0
+
+#define ADSCANSIM_LOG 0
+#define ADSCANSIM_WARN 1
+#define ADSCANSIM_ERR 2
 
 
 // Place PV string definitions here
-// #define ADSCANSIMSHORT_PVNameString          "PV_NAME"            //asynInt32
+#define ADScanSim_PlaybackRateFPSString          "PLAYBACK_RATE_FPS"            //
+#define ADScanSim_PlaybackRateSPFString          "PLAYBACK_RATE_SPF"            //
+#define ADScanSim_ScanFilePathString          "SCAN_FILE_PATH"            //
+#define ADScanSim_AutoRepeatString            "AUTO_REPEAT"            //
+#define ADScanSim_ScanLoadedString            "SCAN_LOADED"            //
+#define ADScanSim_PlaybackPosString    "PLAYBACK_POS"
+#define ADScanSim_NumFramesString             "NUM_FRAMES"            //
 
 
 // Place any required inclues here
@@ -38,7 +48,6 @@
 // Place any in use Data structures here
 
 
-
 /*
  * Class definition of the ADScanSim driver. It inherits from the base ADDriver class
  *
@@ -50,72 +59,77 @@ class ADScanSim : ADDriver{
     public:
 
         // Constructor - NOTE THERE IS A CHANCE THAT YOUR CAMERA DOESNT CONNECT WITH SERIAL # AND THIS MUST BE CHANGED
-        ADScanSim(const char* portName, const char* connectionParam, int maxBuffers, size_t maxMemory, int priority, int stackSize);
+        ADScanSim(const char* portName, int maxBuffers, size_t maxMemory, int priority, int stackSize);
 
 
         // ADDriver overrides
         virtual asynStatus writeInt32(asynUser* pasynUser, epicsInt32 value);
         virtual asynStatus writeFloat64(asynUser* pasynUser, epicsFloat64 value);
+        virtual asynStatus writeOctet(asynUser* pasynUser, const char* value, size_t nChars, size_t* nActual);
 
 
         // destructor. Disconnects from camera, deletes the object
         ~ADScanSim();
 
+        void playbackThread();
+
     protected:
 
         // Add PV indexes here. You must also define the first/last index as you add them.
         // Ex: int ADUVC_UVCCompliance;
-        #define ADSCANSIM_FIRST_PARAM FIRST_PV_INDEX
-        #define ADSCANSIM_LAST_PARAM LAST_PV_INDEX
+        int ADScanSim_PlaybackRateFPS;
+        #define ADSCANSIM_FIRST_PARAM ADScanSim_PlaybackRateFPS
+        int ADScanSim_PlaybackRateSPF;
+        int ADScanSim_ScanFilePath;
+        int ADScanSim_AutoRepeat;
+        int ADScanSim_ScanLoaded;
+        int ADScanSim_PlaybackPos;
+        int ADScanSim_NumFrames;
+        #define ADSCANSIM_LAST_PARAM ADScanSim_NumFrames
 
     private:
 
         // Some data variables
         epicsEventId startEventId;
         epicsEventId endEventId;
-        
 
-        // ----------------------------------------
-        // ScanSim Global Variables
-        //-----------------------------------------
+        herr_t hstatus;
+        hid_t file, image_dset, ts_dset, cm_dset, uid_dset;
 
+
+        void* imageData;
+
+        bool playback = false;
+
+        epicsThreadId playbackThreadId;
 
         // ----------------------------------------
         // ScanSim Functions - Logging/Reporting
         //-----------------------------------------
 
-        //function used to report errors in scanSim operations
-        // Note that vendor libraries usually have a status data structure, if not
-        // it might be wise to make one
-        void reportScanSimError(______ status, const char* functionName);
 
         // reports device and driver info into a log file
         void report(FILE* fp, int details);
 
         // writes to ADStatus PV
-        void updateStatus(const char* status);
+        void updateStatus(const char* status, int errLevel);
 
         // ----------------------------------------
-        // UVC Functions - Connecting to camera
+        // ScanSim Functions - Simulator functions
         //-----------------------------------------
 
-        //function used for connecting to a ScanSim device
-        // NOTE - THIS MAY ALSO NEED TO CHANGE IF SERIAL # NOT USED
-        asynStatus connectToDeviceScanSim(const char* connectionParam);
+        asynStatus openScan(const char* filePath);
+        asynStatus closeScan();
 
-        //function used to disconnect from ScanSim device
-        asynStatus disconnectFromDeviceScanSim();
 
-        // ----------------------------------------
-        // ScanSim Functions - Camera functions
-        //-----------------------------------------
 
+        void setPlaybackRate(int rateFormat);
 
         //function that begins image aquisition
         asynStatus acquireStart();
 
         //function that stops aquisition
-        void acquireStop();
+        asynStatus acquireStop();
 
 };
 
