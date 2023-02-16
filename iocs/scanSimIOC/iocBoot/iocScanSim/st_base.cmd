@@ -4,9 +4,13 @@ errlogInit(20000)
 
 < envPaths
 
+epicsEnvSet("EPICS_DB_INCLUDE_PATH", "$(ADCORE)/db")
+
 #epicsThreadSleep(20)
 dbLoadDatabase("$(ADSCANSIM)/iocs/scanSimIOC/dbd/scanSimApp.dbd")
 scanSimApp_registerRecordDeviceDriver(pdbbase) 
+
+epicsEnvSet(TILED)
 
 #/*
 # * Constructor for ADScanSim driver. Most params are passed to the parent ADDriver constructor. 
@@ -28,6 +32,9 @@ scanSimApp_registerRecordDeviceDriver(pdbbase)
 # ADScanSimConfig(const char* portName, const char* serial, int maxBuffers, size_t maxMemory, int priority, int stackSize)
 # epicsThreadSleep(2)
 
+epicsEnvSet("TILED_METADATA_URL", "https://tiled.nsls2.bnl.gov/api/v1/node/metadata")
+epicsEnvSet("TILED_ARRAY_URL", "https://tiled.nsls2.bnl.gov/api/v1/array/full")
+
 # If searching for device by product ID put "" or empty string for serial number
 ADScanSimConfig("$(PORT)", 0, 0, 0, 0)
 epicsThreadSleep(2)
@@ -37,6 +44,9 @@ asynSetTraceIOMask($(PORT), 0, 2)
 
 dbLoadRecords("$(ADCORE)/db/ADBase.template", "P=$(PREFIX),R=cam1:,PORT=$(PORT),ADDR=0,TIMEOUT=1")
 dbLoadRecords("$(ADSCANSIM)/db/ADScanSim.template","P=$(PREFIX),R=cam1:,PORT=$(PORT),ADDR=0,TIMEOUT=1")
+
+# Optionally, if tiled support is included
+dbLoadRecords("$(ADSCANSIM)/db/ADScanSimTiled.template", "P=$(PREFIX),R=cam1:,PORT=$(PORT),ADDR=0,TIMEOUT=1, TILED_METADATA_URL=$(TILED_METADATA_URL), TILED_ARRAY_URL=$(TILED_ARRAY_URL)")
 
 #
 # Create a standard arrays plugin, set it to get data from Driver.
@@ -60,3 +70,7 @@ iocInit()
 
 # save things every thirty seconds
 create_monitor_set("auto_settings.req", 30, "P=$(PREFIX)")
+
+# Load scan at startup
+#dbpf DEV:SCANSIM-DET1:cam1:ImageDataset "/img_tomo"
+#dbpf DEV:SCANSIM-DET1:cam1:ScanFilePath "/data/fly_scan_id_6774.h5"

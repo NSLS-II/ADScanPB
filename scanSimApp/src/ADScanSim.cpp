@@ -46,11 +46,11 @@
 
 // Error message formatters
 #define ERR(msg)                                                                                 \
-    asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "ERROR | %s::%s: %s\n", driverName, functionName, \
+    asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "ERR  | %s::%s: %s\n", driverName, functionName, \
               msg)
 
 #define ERR_ARGS(fmt, ...)                                                              \
-    asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "ERROR | %s::%s: " fmt "\n", driverName, \
+    asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "ERR  | %s::%s: " fmt "\n", driverName, \
               functionName, __VA_ARGS__);
 
 // Warning message formatters
@@ -63,10 +63,10 @@
 
 // Log message formatters
 #define LOG(msg) \
-    asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "%s::%s: %s\n", driverName, functionName, msg)
+    asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "LOG  | %s::%s: %s\n", driverName, functionName, msg)
 
 #define LOG_ARGS(fmt, ...)                                                                       \
-    asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "%s::%s: " fmt "\n", driverName, functionName, \
+    asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "LOG  | %s::%s: " fmt "\n", driverName, functionName, \
               __VA_ARGS__);
 
 
@@ -120,29 +120,21 @@ static void playbackThreadC(void* pPvt){
 }
 
 
-void ADScanSim::updateStatus(const char* msg, int errLevel){
+void ADScanSim::updateStatus(const char* msg, ADScanSimErr_t errLevel){
     const char* functionName = "updateStatus";
     switch(errLevel){
         case ADSCANSIM_LOG:
             LOG(msg);
+            break;
         case ADSCANSIM_WARN:
             WARN(msg);
+            break;
         default:
             ERR(msg);
+            break;
     }
     setStringParam(ADStatusMessage, msg);
 }
-
-
-
-
-// -----------------------------------------------------------------------
-// ADScanSim Connect/Disconnect Functions
-// -----------------------------------------------------------------------
-
-
-
-
 
 
 // -----------------------------------------------------------------------
@@ -167,7 +159,6 @@ asynStatus ADScanSim::acquireStart(){
         updateStatus("Scan has not been loaded for playback!", ADSCANSIM_ERR);
         status = asynError;
     }
-
 
     if(status != asynSuccess){
         setIntegerParam(ADAcquire, 0);
@@ -196,7 +187,7 @@ void ADScanSim::playbackThread(){
 
     NDArray* pArray;
     NDArrayInfo arrayInfo;
-    int dataType, imageMode, colorMode, ndims, autoRepeat, nframes;
+    int dataType, imageMode, colorMode, ndims, autoRepeat, nframes, arrayCallbacks;
 
     // Three different frame counters.
     int playbackPos, imageCounter, totalImageCounter;
@@ -213,7 +204,6 @@ void ADScanSim::playbackThread(){
     getIntegerParam(ADMaxSizeX, &width);
     getIntegerParam(ADMaxSizeY, &height);
 
-
     if((NDColorMode_t) colorMode == NDColorModeMono) ndims = 2;
     else ndims = 3;
 
@@ -228,8 +218,6 @@ void ADScanSim::playbackThread(){
         dims[2] = height;
     }
 
-
-
     while(playback) {
         double spf;
         getDoubleParam(ADScanSim_PlaybackRateSPF, &spf);
@@ -240,7 +228,7 @@ void ADScanSim::playbackThread(){
         this->pArrays[0] = pNDArrayPool->alloc(ndims, dims, (NDDataType_t) dataType, 0, NULL);
     
         if(this->pArrays[0]!=NULL){ 
-            pArray = this->pArrays[0];   
+            pArray = this->pArrays[0];
         }
         else{
             this->pArrays[0]->release();
@@ -251,7 +239,18 @@ void ADScanSim::playbackThread(){
 
         updateTimeStamp(&pArray->epicsTS);
 
-        memcpy(pArray->pData, (uint16_t*) this->imageData + (width * height * (playbackPos)), width * height * 2);
+        size_t num_elems = 1;
+        for(int i = 0; i< ndims; i++){
+            num_elems = num_elems * dims[i];
+        }
+
+        size_t totalBytes = num_elems;
+        if(dataType == NDUInt8) {
+            memcpy(pArray->pData, (uint8_t*) this->scanImageDataBuffer + (num_elems * (playbackPos)), num_elems);
+        } else {
+            totalBytes = totalBytes * 2;
+            memcpy(pArray->pData, (uint16_t*) this->scanImageDataBuffer + (num_elems * (playbackPos)), totalBytes);
+        }
 
         pArray->pAttributeList->add("ColorMode", "Color Mode", NDAttrInt32, &colorMode);
 
@@ -265,8 +264,22 @@ void ADScanSim::playbackThread(){
         setIntegerParam(ADNumImagesCounter, totalImageCounter);
         pArray->uniqueId = totalImageCounter;
 
+        setIntegerParam(NDArraySizeX, width);
+        setIntegerParam(NDArraySizeY, height);
+        setIntegerParam(NDArraySize, totalBytes);
 
-        doCallbacksGenericPointer(pArray, NDArrayData, 0);
+        // If we don't have a timestamp buffer loaded, create new timestamp
+        if(this->scanTimestampDataBuffer == NULL) {
+            pArray->timeStamp = (double)pArray->epicsTS.secPastEpoch 
+                      + ((double)pArray->epicsTS.nsec * 1.0e-9);
+        } else {
+            pArray->timeStamp = *((double*) this->scanTimestampDataBuffer + playbackPos); 
+        }
+
+
+        getIntegerParam(NDArrayCallbacks, &arrayCallbacks);
+        if(arrayCallbacks)
+            doCallbacksGenericPointer(pArray, NDArrayData, 0);
 
         pArray->release();
 
@@ -298,6 +311,7 @@ void ADScanSim::playbackThread(){
             setIntegerParam(ADAcquire, 0);
             setIntegerParam(ADStatus, ADStatusIdle);
         }
+        callParamCallbacks();
     }
 }
 
@@ -313,10 +327,8 @@ asynStatus ADScanSim::acquireStop(){
     const char* functionName = "acquireStop";
     asynStatus status = asynSuccess;
 
-    // Here, you need to stop acquisition. If the vendor software spawned its own callback thread, you likely
-    // just need to call some stop acquisition function. If you created your own callback thread, you should join
-    // it here.
-    if(this->playbackThreadId != NULL){
+    // Stop acquistion and join back the playback thread
+    if(this->playback){
         this->playback = false;
         epicsThreadMustJoin(this->playbackThreadId);
     }
@@ -461,30 +473,136 @@ asynStatus ADScanSim::writeFloat64(asynUser* pasynUser, epicsFloat64 value){
 
 asynStatus ADScanSim::closeScan(){
     // If acquiring, stop acquiring first.
-    int acquiring;
-    getIntegerParam(ADAcquire, &acquiring);
-    if(acquiring == 1)
+    if(this->playback)
         acquireStop();
 
-    free(imageData);
-    
-    this->hstatus = H5Dclose(this->image_dset);
-    //this->hstatus = H5Dclose(this->cm_dset);
-    //this->hstatus = H5Dclose(this->ts_dset);
-    //this->hstatus = H5Dclose(this->uid_dset);
+    if(scanImageDataBuffer != NULL)
+        free(scanImageDataBuffer);
 
-    this->hstatus = H5Fclose(this->file);
+    if(scanTimestampDataBuffer != NULL)
+        free(scanTimestampDataBuffer);
 
     setIntegerParam(ADScanSim_ScanLoaded, 0);
+    callParamCallbacks();
 }
 
-
-asynStatus ADScanSim::openScan(const char* filePath){
-
-    const char* functionName = "openScan";
+#ifdef ADSCANSIM_WITH_TILED_SUPPORT
+asynStatus ADScanSim::openScanTiled(const char* nodePath) {
+    const char* functionName = "openScanTiled";
     asynStatus status = asynSuccess;
 
-    LOG_ARGS("Attempting to open file: %s", filePath);
+    char metadataURL[256];
+    char arrayURL[256];
+    getStringParam(ADScanSim_TiledMetadataURL, 256, metadataURL);
+    getStringParam(ADScanSim_TiledArrayURL, 256, arrayURL);
+    printf("%s\n", metadataURL);
+
+    if(!this->tiledConfigured){
+        updateStatus("Tiled configuration incomplete!", ADSCANSIM_ERR);
+        return asynError;
+    }
+
+    LOG_ARGS("Attempting to load scan from Tiled node: %s", nodePath);
+    // If we have a scan loaded already, close it out first
+    int scanLoaded;
+    getIntegerParam(ADScanSim_ScanLoaded, &scanLoaded);
+    if(scanLoaded == 1)
+        closeScan();
+
+    cpr::Header auth = cpr::Header{{string("Authorization"), "Apikey " +  this->tiledApiKey}};
+    cpr::Response r = cpr::Get(cpr::Url{string(metadataURL) + string(nodePath)}, auth);
+
+    cout << r.text << endl;
+
+    json metadata_j = json::parse(r.text.c_str());
+    json scanShape = metadata_j["data"]["attributes"]["structure"]["macro"]["shape"];
+    int numAcquistions = scanShape[0].get<int>();
+    int numFrames = scanShape[1].get<int>() * numAcquistions;
+    int ySize = scanShape[2].get<int>();
+    int xSize = scanShape[3].get<int>();
+    int bytesPerElem = metadata_j["data"]["attributes"]["structure"]["micro"]["itemsize"].get<int>();
+    json chunks = metadata_j["data"]["attributes"]["structure"]["macro"]["chunks"];
+
+    string dataURL = metadata_j["data"]["links"]["block"];
+    char* dataURLToken = strtok((char*) dataURL.c_str(), "?");
+    dataURL = string(dataURLToken);
+    cout << dataURL << endl;
+
+    // determine whether or not the image data is in color or not.
+    //if(colorChannels == 3){
+    //    setIntegerParam(NDColorMode, NDColorModeRGB1);
+    //} else {
+        setIntegerParam(NDColorMode, NDColorModeMono);
+    //}
+
+    updateStatus("Loading scan from URL...", ADSCANSIM_LOG);
+
+    // First three channels are always the num frames, height, and then width
+    setIntegerParam(ADScanSim_NumFrames, numFrames);
+    setIntegerParam(ADMaxSizeX, xSize);
+    setIntegerParam(ADSizeX, xSize);
+    setIntegerParam(ADMaxSizeY, ySize);
+    setIntegerParam(ADSizeY, ySize);
+
+    size_t numElems = numFrames * ySize * xSize;
+
+    if(bytesPerElem == 1) {
+        setIntegerParam(NDDataType, NDUInt8);
+    } else if(bytesPerElem == 2) {
+        setIntegerParam(NDDataType, NDUInt16);
+    } else {
+        updateStatus("Couldn't read image dataset data type!", ADSCANSIM_ERR);
+        closeScan();
+        return asynError;
+    }
+
+    callParamCallbacks();
+
+    // allocate buffer for image data & read entire scan into it.
+    this->scanImageDataBuffer = calloc(numElems, bytesPerElem);
+
+    int firstChunkListLen = chunks[0].size();
+    int secondChunkListLen = chunks[1].size();
+    size_t bufferWriteOffset = 0;
+    for(int i = 0; i< firstChunkListLen; i++) {
+        for(int j = 0; j< secondChunkListLen; j++) {
+
+            int numAcquisitionsPerChunk = chunks[0][i].get<int>();
+            int numFramesPerChunk = chunks[1][j].get<int>();
+
+            cpr::Header dataHeader = cpr::Header{{string("Authorization"), "Apikey " +  this->tiledApiKey}, 
+                                             {string("Accept"), string("application/octet-stream")}};
+
+            // TODO - Update to use block url read from metadata above
+            cpr::Response data = cpr::Get(cpr::Url{string(arrayURL) + string(nodePath)}, 
+                               cpr::ReserveSize{numElems * bytesPerElem},
+                               //cpr::AcceptEncoding({{"deflate", "gzip", "zlib"}}),
+                               dataHeader);
+            size_t numBytesToCopy = numAcquisitionsPerChunk * numFramesPerChunk * xSize * ySize * bytesPerElem;
+            bufferWriteOffset += numBytesToCopy;
+            memcpy(this->scanImageDataBuffer + bufferWriteOffset, (void*) data.text.c_str(), numBytesToCopy);
+        }
+    }
+
+
+
+    updateStatus("Done", ADSCANSIM_LOG);
+    setIntegerParam(ADScanSim_ScanLoaded, 1);
+    callParamCallbacks();
+    return status;
+}
+#endif
+
+asynStatus ADScanSim::openScanHDF5(const char* filePath){
+
+    const char* functionName = "openScanHDF5";
+    asynStatus status = asynSuccess;
+
+    herr_t hstatus;
+    hid_t fileId, imageDatasetId, tsDatasetId;
+
+
+    LOG_ARGS("Attempting to open HDF5 file: %s", filePath);
     // If we have a scan loaded already, close it out first
     int scanLoaded;
     getIntegerParam(ADScanSim_ScanLoaded, &scanLoaded);
@@ -492,60 +610,105 @@ asynStatus ADScanSim::openScan(const char* filePath){
         closeScan();
 
     // Open H5 file and 
-    this->file = H5Fopen(filePath, H5F_ACC_RDONLY, H5P_DEFAULT);
+    fileId = H5Fopen(filePath, H5F_ACC_RDONLY, H5P_DEFAULT);
 
-    if (this->file < 0) {
+    if (fileId < 0) {
         updateStatus("Failed to open HDF5 scan file!", ADSCANSIM_ERR);
         return asynError;
     }
 
-    const char imageDataset[256];
+    char imageDataset[256];
     getStringParam(ADScanSim_ImageDataset, 256, (char*) imageDataset);
 
-    this->image_dset = H5Dopen(file, imageDataset, H5P_DEFAULT);
-    //this->ts_dset = H5Dopen(file, "/entry/instrument/NDAttributes/NDArrayTimeStamp", H5P_DEFAULT);
-    //this->cm_dset = H5Dopen(file, "/entry/instrument/detector/NDAttributes/ColorMode", H5P_DEFAULT);
-    //this->uid_dset = H5Dopen(file, "/entry/instrument/NDAttributes/NDArrayUniqueId", H5P_DEFAULT);
+    imageDatasetId = H5Dopen(fileId, imageDataset, H5P_DEFAULT);
 
-    hid_t dspace = H5Dget_space(image_dset);
+    if(imageDatasetId < 0){
+        updateStatus("Image dataset not found in file!", ADSCANSIM_ERR);
+        H5Fclose(fileId);
+        return asynError;
+    }
+
+    char timestampDataset[256];
+    getStringParam(ADScanSim_TSDataset, 256, (char*) timestampDataset);
+    if(strlen(timestampDataset) > 0){
+        tsDatasetId = H5Dopen(fileId, timestampDataset, H5P_DEFAULT);
+
+        if(tsDatasetId < 0){
+            WARN("Timestamp dataset could not be opened");
+        } else {
+            hid_t dspace = H5Dget_space(tsDatasetId);
+            hsize_t dims[1];
+            H5Sget_simple_extent_dims(dspace, dims, NULL);
+            H5Dclose(dspace);
+
+            scanTimestampDataBuffer = calloc(dims[0], sizeof(double));
+            H5Dread(tsDatasetId, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, (double*) this->scanTimestampDataBuffer);
+            H5Dclose(tsDatasetId);
+        }
+
+    }
+
+    hid_t dspace = H5Dget_space(imageDatasetId);
     const int ndims = H5Sget_simple_extent_ndims(dspace);
 
     hsize_t dims[ndims];
-    printf("NDIMS: %d\n", ndims);
+    printf("Detected image dataset with %d dimensions:\n", ndims);
     H5Sget_simple_extent_dims(dspace, dims, NULL);
+    H5Dclose(dspace);
 
+    size_t num_elems = 1;
     for(int i = 0; i< ndims; i++){
         printf("%d\n", dims[i]);
+        num_elems = num_elems * dims[i];
     }
 
-
+    // Number of frames in scan will always be the first dimension
     hsize_t numFrames = dims[0];
 
-    setStringParam(ADStatusMessage, "Loading scan file...");
+    updateStatus("Loading scan file...", ADSCANSIM_LOG);
+
+    // First three channels are always the num frames, height, and then width
     setIntegerParam(ADScanSim_NumFrames, numFrames);
-    printf("Here1\n");
     setIntegerParam(ADMaxSizeX, (int) dims[2]);
     setIntegerParam(ADSizeX, (int) dims[2]);
-    printf("Here2\n");
     setIntegerParam(ADMaxSizeY, (int) dims[1]);
     setIntegerParam(ADSizeY, (int) dims[1]);
-    printf("Here3\n");
-    setIntegerParam(NDDataType, NDUInt16);
-    printf("Here4\n");
-    setIntegerParam(NDColorMode, NDColorModeMono);
-    printf("Here5\n");
-    callParamCallbacks();
 
-    this->imageData = calloc(dims[0] * dims[1] * dims[2], sizeof(uint16_t));
-    H5Dread(image_dset, H5T_NATIVE_UINT16, H5S_ALL, H5S_ALL, H5P_DEFAULT, this->imageData);
-    for(int i = 0; i< 1000; i++){
-        printf("Pixel #%d: %d\n", i, *((uint16_t*) imageData + i));
+    // determine whether or not the image data is in color or not.
+    if(ndims == 4){
+        setIntegerParam(NDColorMode, NDColorModeRGB1);
+    } else {
+        setIntegerParam(NDColorMode, NDColorModeMono);
     }
 
-    
-    setStringParam(ADStatusMessage, "Done");
+    // Determine datatype of image data, and populate corresponding PVs
+    hid_t h5_dtype = H5Dget_type(imageDatasetId);
+    size_t dtype_size;
+    if(H5Tequal(h5_dtype, H5T_NATIVE_UINT8) || H5Tequal(h5_dtype, H5T_NATIVE_UCHAR)) {
+        setIntegerParam(NDDataType, NDUInt8);
+        dtype_size = sizeof(uint8_t);
+    } else if(H5Tequal(h5_dtype, H5T_NATIVE_UINT16)) {
+        setIntegerParam(NDDataType, NDUInt16);
+        dtype_size = sizeof(uint16_t);
+    } else {
+        updateStatus("Couldn't read image dataset data type!", ADSCANSIM_ERR);
+        H5Tclose(h5_dtype);
+        closeScan();
+        return asynError;
+    }
+
+    callParamCallbacks();
+
+    // allocate buffer for image data & read entire scan into it.
+    this->scanImageDataBuffer = calloc(num_elems, dtype_size);
+    H5Dread(imageDatasetId, h5_dtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, this->scanImageDataBuffer);
+
+    H5Tclose(h5_dtype);
+
+    H5Dclose(imageDatasetId);
+    H5Fclose(fileId);
+    updateStatus("Done", ADSCANSIM_LOG);
     setIntegerParam(ADScanSim_ScanLoaded, 1);
-    printf("Here6\n");
     callParamCallbacks();
     return status;
 
@@ -565,7 +728,16 @@ asynStatus ADScanSim::writeOctet(asynUser* pasynUser, const char* value, size_t 
 
     if (function == ADScanSim_ScanFilePath) {
         if ((nChars > 0) && (value[0] != 0)) {
-            status = this->openScan(value);
+            int dataSource;
+            getIntegerParam(ADScanSim_DataSource, &dataSource);
+            if(dataSource == 0)
+                status = this->openScanHDF5(value);
+#ifdef ADSCANSIM_WITH_TILED_SUPPORT
+            else if(dataSource == 1)
+                status = this->openScanTiled(value);
+#endif
+            else
+                updateStatus("Selected data source not supported in current ADScanSim build!", ADSCANSIM_ERR);
         }
     }
 
@@ -573,10 +745,8 @@ asynStatus ADScanSim::writeOctet(asynUser* pasynUser, const char* value, size_t 
           /* If this parameter belongs to a base class call its method */
         status = ADDriver::writeOctet(pasynUser, value, nChars, nActual);
     }
-    printf("Here7\n");
     // Do callbacks so higher layers see any changes
     callParamCallbacks(addr);
-    printf("Here8\n");
 
     *nActual = nChars;
     return status;
@@ -634,6 +804,11 @@ ADScanSim::ADScanSim(const char* portName, int maxBuffers, size_t maxMemory, int
     createParam(ADScanSim_PlaybackRateFPSString, asynParamFloat64, &ADScanSim_PlaybackRateFPS);
     createParam(ADScanSim_PlaybackRateSPFString, asynParamFloat64, &ADScanSim_PlaybackRateSPF);
     createParam(ADScanSim_ScanFilePathString, asynParamOctet, &ADScanSim_ScanFilePath);
+#ifdef ADSCANSIM_WITH_TILED_SUPPORT
+    createParam(ADScanSim_TiledMetadataURLString, asynParamOctet, &ADScanSim_TiledMetadataURL);
+    createParam(ADScanSim_TiledArrayURLString, asynParamOctet, &ADScanSim_TiledArrayURL);
+#endif
+    createParam(ADScanSim_DataSourceString, asynParamInt32, &ADScanSim_DataSource);
     createParam(ADScanSim_ImageDatasetString, asynParamOctet, &ADScanSim_ImageDataset);
     createParam(ADScanSim_TSDatasetString, asynParamOctet, &ADScanSim_TSDataset);
     createParam(ADScanSim_AutoRepeatString, asynParamInt32, &ADScanSim_AutoRepeat);
@@ -647,6 +822,31 @@ ADScanSim::ADScanSim(const char* portName, int maxBuffers, size_t maxMemory, int
     epicsSnprintf(versionString, sizeof(versionString), "%d.%d.%d", ADSCANSIM_VERSION, ADSCANSIM_REVISION, ADSCANSIM_MODIFICATION);
     setStringParam(NDDriverVersion, versionString);
 
+    char h5versionString[25];
+    epicsSnprintf(h5versionString, sizeof(h5versionString), "%d.%d.%d", H5_VERS_MAJOR, H5_VERS_MINOR, H5_VERS_RELEASE);
+    setStringParam(ADSDKVersion, h5versionString);
+
+    setStringParam(ADModel, "Scan Playback Tool");
+    setStringParam(ADManufacturer, "BNL - NSLS2");
+    setStringParam(ADFirmwareVersion, "N/A");
+    setStringParam(ADSerialNumber, "N/A");
+
+#ifdef ADSCANSIM_WITH_TILED_SUPPORT
+    char metadataURL[256];
+
+    // Load Tiled api key from env vars.
+    if(getenv("TILED_API_KEY") != NULL)
+        this->tiledApiKey = string(getenv("TILED_API_KEY"));
+
+    if(getenv("TILED_METADATA_URL") != NULL)
+        setStringParam(ADScanSim_TiledMetadataURL, getenv("TILED_METADATA_URL"));
+
+    getStringParam(ADScanSim_TiledMetadataURL, 256, metadataURL);
+
+    // If all required tiled env vars are set, allow for opening data via tiled
+    if(!this->tiledApiKey.empty() && strlen(metadataURL) != 0)
+        this->tiledConfigured = true;
+#endif
 
      // when epics is exited, delete the instance of this class
     epicsAtExit(exitCallbackC, this);

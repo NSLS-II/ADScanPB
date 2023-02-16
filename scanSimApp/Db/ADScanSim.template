@@ -66,6 +66,28 @@ record(waveform, "$(P)$(R)ScanFilePath_RBV")
     field(SCAN, "I/O Intr")
 }
 
+
+record(bo, "$(P)$(R)DataSource")
+{
+    field(PINI, "YES")
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))DATA_SOURCE")
+    field(VAL,  "0")
+    field(ZNAM, "HDF5 File")
+    field(ONAM, "Tiled")
+    info(autosaveFields, "VAL")
+}
+
+record(bi, "$(P)$(R)DataSource_RBV")
+{
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))DATA_SOURCE")
+    field(ZNAM, "HDF5 File")
+    field(ONAM, "Tiled")
+    field(SCAN, "I/O Intr")
+}
+
+
 record(waveform, "$(P)$(R)ImageDataset")
 {
     field(PINI, "YES")

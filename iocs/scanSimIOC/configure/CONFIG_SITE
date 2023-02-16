@@ -34,11 +34,6 @@ CHECK_RELEASE = YES
 #   take effect.
 #IOCS_APPL_TOP = </IOC/path/to/application/top>
 
-# Get settings from AREA_DETECTOR, so we only have to configure once for all detectors if we want to
--include $(AREA_DETECTOR)/configure/CONFIG_SITE
--include $(AREA_DETECTOR)/configure/CONFIG_SITE.$(EPICS_HOST_ARCH)
--include $(AREA_DETECTOR)/configure/CONFIG_SITE.$(EPICS_HOST_ARCH).Common
-ifdef T_A
-  -include $(AREA_DETECTOR)/configure/CONFIG_SITE.Common.$(T_A)
-  -include $(AREA_DETECTOR)/configure/CONFIG_SITE.$(EPICS_HOST_ARCH).$(T_A)
-endif
+# Use configuration from ADScanSim to decide whether to include
+# Tiled support or not
+-include $(ADSCANSIM)/configure/CONFIG_SITE

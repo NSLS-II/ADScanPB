@@ -12,6 +12,10 @@ include $(TOP)/configure/CONFIG
 # databases, templates, subtitutions
 DB += ADScanSim.template
 
+ifeq ($(WITH_TILED_SUPPORT), YES)
+DB += ADScanSimTiled.template
+endif
+
 #-------------------------------------------
 # If <anyname>.db template is not named <anyname>*.template add
 # <anyname>_TEMPLATE = <templatename>

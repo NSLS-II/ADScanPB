@@ -4,6 +4,12 @@ include $(TOP)/configure/CONFIG
 DIRS := $(DIRS) configure
 DIRS := $(DIRS) scanSimApp
 
+# To allow for playback from tiled sources, 
+ifeq ($(WITH_TILED_SUPPORT), YES)
+DIRS := $(DIRS) scanSimSupport
+scanSimApp_DEPEND_DIRS += scanSimSupport
+endif
+
 ifeq ($(BUILD_IOCS), YES)
 DIRS := $(DIRS) $(filter-out $(DIRS), $(wildcard iocs))
 iocs_DEPEND_DIRS += scanSimApp

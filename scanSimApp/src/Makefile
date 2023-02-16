@@ -9,11 +9,18 @@ endif
 
 USR_CPPFLAGS += -std=c++11
 
+ifeq ($(WITH_TILED_SUPPORT), YES)
+USR_CPPFLAGS += -DADSCANSIM_WITH_TILED_SUPPORT
+endif
+
 INC += ADScanSim.h
 
 LIBRARY_IOC = ADScanSim 
 LIB_SRCS += ADScanSim.cpp
 
+ifeq ($(WITH_TILED_SUPPORT), YES)
+LIB_SYS_LIBS += cpr curl-d z
+endif
 
 DBD += scanSimSupport.dbd
 

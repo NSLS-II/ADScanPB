@@ -21,15 +21,26 @@
 #define ADSCANSIM_REVISION     0
 #define ADSCANSIM_MODIFICATION 0
 
-#define ADSCANSIM_LOG 0
-#define ADSCANSIM_WARN 1
-#define ADSCANSIM_ERR 2
+
+typedef enum ADScanSimErr {
+    ADSCANSIM_LOG = 0,
+    ADSCANSIM_WARN = 1,
+    ADSCANSIM_ERR = 2,
+} ADScanSimErr_t;
+
 
 
 // Place PV string definitions here
 #define ADScanSim_PlaybackRateFPSString          "PLAYBACK_RATE_FPS"            //
 #define ADScanSim_PlaybackRateSPFString          "PLAYBACK_RATE_SPF"            //
 #define ADScanSim_ScanFilePathString          "SCAN_FILE_PATH"            //
+
+#ifdef ADSCANSIM_WITH_TILED_SUPPORT
+#define ADScanSim_TiledMetadataURLString "TILED_METADATA_URL"
+#define ADScanSim_TiledArrayURLString "TILED_ARRAY_URL"
+#endif
+
+#define ADScanSim_DataSourceString             "DATA_SOURCE"
 #define ADScanSim_ImageDatasetString          "IMAGE_DATASET"            //
 #define ADScanSim_TSDatasetString          "TS_DATASET"            //
 #define ADScanSim_AutoRepeatString            "AUTO_REPEAT"            //
@@ -42,6 +53,16 @@
 // Place any required inclues here
 
 #include "ADDriver.h"
+
+#ifdef ADSCANSIM_WITH_TILED_SUPPORT
+#include "json.hpp"
+#include "cpr/cpr.h"
+#include <string>
+using namespace std;
+
+using json = nlohmann::json;
+#endif
+
 
 
 // ----------------------------------------
@@ -84,6 +105,11 @@ class ADScanSim : ADDriver{
         #define ADSCANSIM_FIRST_PARAM ADScanSim_PlaybackRateFPS
         int ADScanSim_PlaybackRateSPF;
         int ADScanSim_ScanFilePath;
+#ifdef ADSCANSIM_WITH_TILED_SUPPORT
+        int ADScanSim_TiledMetadataURL;
+        int ADScanSim_TiledArrayURL;
+#endif
+        int ADScanSim_DataSource;
         int ADScanSim_ImageDataset;
         int ADScanSim_TSDataset;
         int ADScanSim_AutoRepeat;
@@ -99,11 +125,15 @@ class ADScanSim : ADDriver{
         epicsEventId startEventId;
         epicsEventId endEventId;
 
-        herr_t hstatus;
-        hid_t file, image_dset, ts_dset, cm_dset, uid_dset;
+#ifdef ADSCANSIM_WITH_TILED_SUPPORT
+        string tiledApiKey;
+        bool tiledConfigured = false;
+#endif
 
 
-        void* imageData;
+
+        void* scanImageDataBuffer;
+        void* scanTimestampDataBuffer;
 
         bool playback = false;
 
@@ -118,16 +148,19 @@ class ADScanSim : ADDriver{
         void report(FILE* fp, int details);
 
         // writes to ADStatus PV
-        void updateStatus(const char* status, int errLevel);
+        void updateStatus(const char* status, ADScanSimErr_t errLevel);
 
         // ----------------------------------------
         // ScanSim Functions - Simulator functions
         //-----------------------------------------
 
-        asynStatus openScan(const char* filePath);
+        asynStatus openScanHDF5(const char* filePath);
+
+#ifdef ADSCANSIM_WITH_TILED_SUPPORT
+        asynStatus openScanTiled(const char* nodePath);
+#endif
+
         asynStatus closeScan();
-
-
 
         void setPlaybackRate(int rateFormat);
 

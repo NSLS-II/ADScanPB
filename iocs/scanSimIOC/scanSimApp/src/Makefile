@@ -17,7 +17,9 @@ $(PROD_NAME)_SRCS += $(PROD_NAME)_registerRecordDeviceDriver.cpp $(PROD_NAME)Mai
 $(PROD_NAME)_LIBS += ADScanSim
 
 # Add any system libraries + anything that will be dynamically linked (*.so libraries)
-$(PROD_NAME)_SYS_LIBS += 
+ifeq ($(WITH_TILED_SUPPORT), YES)
+$(PROD_NAME)_SYS_LIBS += cpr curl-d z 
+endif
 
 include $(ADCORE)/ADApp/commonDriverMakefile
 
