@@ -335,6 +335,7 @@ asynStatus ADScanSim::acquireStop(){
 
     setIntegerParam(ADStatus, ADStatusIdle);
     LOG("Stopping Image Acquisition");
+    callParamCallbacks();
     return status;
 }
 
@@ -357,6 +358,20 @@ asynStatus ADScanSim::acquireStop(){
 
 
 //  Add functions for getting/setting various camera settings (gain, exposure etc.) here
+
+
+asynStatus ADScanSim::connect(asynUser* pasynUser){
+    return asynSuccess;
+}
+
+asynStatus ADScanSim::disconnect(asynUser* pasynUser){
+    const char* functionName = "disconnect";
+    asynStatus status = pasynManager->exceptionDisconnect(this->pasynUserSelf);
+    if (status) {
+        ERR_ARGS("error calling pasynManager->exceptionDisconnect, error=%s", pasynUserSelf->errorMessage);
+    }
+    return status;
+}
 
 
 //-------------------------------------------------------------------------
@@ -400,6 +415,8 @@ asynStatus ADScanSim::writeInt32(asynUser* pasynUser, epicsInt32 value){
     } else if(function == NDDataType || function == NDColorMode){
         updateStatus("Color mode and data type are read from loaded scan", ADSCANSIM_ERR);
         status = asynError;
+    } else if(function == ADStatus) {
+        if(value == ADStatusIdle) printf("SAW STAT TO IDLE");
     } else{
         if (function < ADSCANSIM_FIRST_PARAM) {
             status = ADDriver::writeInt32(pasynUser, value);
@@ -471,16 +488,17 @@ asynStatus ADScanSim::writeFloat64(asynUser* pasynUser, epicsFloat64 value){
 }
 
 
-asynStatus ADScanSim::closeScan(){
+void ADScanSim::closeScan(){
     // If acquiring, stop acquiring first.
     if(this->playback)
         acquireStop();
 
-    if(scanImageDataBuffer != NULL)
-        free(scanImageDataBuffer);
+    // clear out buffers if they have been allocated
+    if(this->scanImageDataBuffer != NULL)
+        free(this->scanImageDataBuffer);
 
-    if(scanTimestampDataBuffer != NULL)
-        free(scanTimestampDataBuffer);
+    if(this->scanTimestampDataBuffer != NULL)
+        free(this->scanTimestampDataBuffer);
 
     setIntegerParam(ADScanSim_ScanLoaded, 0);
     callParamCallbacks();
@@ -503,11 +521,6 @@ asynStatus ADScanSim::openScanTiled(const char* nodePath) {
     }
 
     LOG_ARGS("Attempting to load scan from Tiled node: %s", nodePath);
-    // If we have a scan loaded already, close it out first
-    int scanLoaded;
-    getIntegerParam(ADScanSim_ScanLoaded, &scanLoaded);
-    if(scanLoaded == 1)
-        closeScan();
 
     cpr::Header auth = cpr::Header{{string("Authorization"), "Apikey " +  this->tiledApiKey}};
     cpr::Response r = cpr::Get(cpr::Url{string(metadataURL) + string(nodePath)}, auth);
@@ -580,7 +593,7 @@ asynStatus ADScanSim::openScanTiled(const char* nodePath) {
                                dataHeader);
             size_t numBytesToCopy = numAcquisitionsPerChunk * numFramesPerChunk * xSize * ySize * bytesPerElem;
             bufferWriteOffset += numBytesToCopy;
-            memcpy(this->scanImageDataBuffer + bufferWriteOffset, (void*) data.text.c_str(), numBytesToCopy);
+            memcpy((uint8_t*) this->scanImageDataBuffer + bufferWriteOffset, (void*) data.text.c_str(), numBytesToCopy);
         }
     }
 
@@ -598,16 +611,10 @@ asynStatus ADScanSim::openScanHDF5(const char* filePath){
     const char* functionName = "openScanHDF5";
     asynStatus status = asynSuccess;
 
-    herr_t hstatus;
     hid_t fileId, imageDatasetId, tsDatasetId;
 
 
     LOG_ARGS("Attempting to open HDF5 file: %s", filePath);
-    // If we have a scan loaded already, close it out first
-    int scanLoaded;
-    getIntegerParam(ADScanSim_ScanLoaded, &scanLoaded);
-    if(scanLoaded == 1)
-        closeScan();
 
     // Open H5 file and 
     fileId = H5Fopen(filePath, H5F_ACC_RDONLY, H5P_DEFAULT);
@@ -692,7 +699,10 @@ asynStatus ADScanSim::openScanHDF5(const char* filePath){
         dtype_size = sizeof(uint16_t);
     } else {
         updateStatus("Couldn't read image dataset data type!", ADSCANSIM_ERR);
+        H5Dclose(imageDatasetId);
+        H5Dclose(tsDatasetId);
         H5Tclose(h5_dtype);
+        H5Fclose(fileId);
         closeScan();
         return asynError;
     }
@@ -728,6 +738,13 @@ asynStatus ADScanSim::writeOctet(asynUser* pasynUser, const char* value, size_t 
 
     if (function == ADScanSim_ScanFilePath) {
         if ((nChars > 0) && (value[0] != 0)) {
+            
+            // If we have a scan loaded already, close it out first
+            int scanLoaded;
+            getIntegerParam(ADScanSim_ScanLoaded, &scanLoaded);
+            if(scanLoaded == 1)
+                closeScan();
+
             int dataSource;
             getIntegerParam(ADScanSim_DataSource, &dataSource);
             if(dataSource == 0)
@@ -855,12 +872,9 @@ ADScanSim::ADScanSim(const char* portName, int maxBuffers, size_t maxMemory, int
 
 ADScanSim::~ADScanSim(){
     const char* functionName = "~ADScanSim";
-
-    closeScan();
-    
     LOG("Shutting down Scan Simulator...");
-    
-    disconnect(this->pasynUserSelf);
+    closeScan();
+    LOG("Done.");
 }
 
 

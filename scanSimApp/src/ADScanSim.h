@@ -90,7 +90,8 @@ class ADScanSim : ADDriver{
         virtual asynStatus writeInt32(asynUser* pasynUser, epicsInt32 value);
         virtual asynStatus writeFloat64(asynUser* pasynUser, epicsFloat64 value);
         virtual asynStatus writeOctet(asynUser* pasynUser, const char* value, size_t nChars, size_t* nActual);
-
+        virtual asynStatus connect(asynUser* pasynUser);
+        virtual asynStatus disconnect(asynUser* pasynUser);
 
         // destructor. Disconnects from camera, deletes the object
         ~ADScanSim();
@@ -160,7 +161,7 @@ class ADScanSim : ADDriver{
         asynStatus openScanTiled(const char* nodePath);
 #endif
 
-        asynStatus closeScan();
+        void closeScan();
 
         void setPlaybackRate(int rateFormat);
 
