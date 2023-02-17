@@ -510,10 +510,11 @@ asynStatus ADScanSim::openScanTiled(const char* nodePath) {
     asynStatus status = asynSuccess;
 
     char metadataURL[256];
-    char arrayURL[256];
     getStringParam(ADScanSim_TiledMetadataURL, 256, metadataURL);
-    getStringParam(ADScanSim_TiledArrayURL, 256, arrayURL);
     printf("%s\n", metadataURL);
+
+    if(!this->tiledApiKey.empty() && strlen(metadataURL) != 0)
+        this->tiledConfigured = true;
 
     if(!this->tiledConfigured){
         updateStatus("Tiled configuration incomplete!", ADSCANSIM_ERR);
@@ -523,7 +524,7 @@ asynStatus ADScanSim::openScanTiled(const char* nodePath) {
     LOG_ARGS("Attempting to load scan from Tiled node: %s", nodePath);
 
     cpr::Header auth = cpr::Header{{string("Authorization"), "Apikey " +  this->tiledApiKey}};
-    cpr::Response r = cpr::Get(cpr::Url{string(metadataURL) + string(nodePath)}, auth);
+    cpr::Response r = cpr::Get(cpr::Url{string(nodePath)}, auth);
 
     cout << r.text << endl;
 
@@ -587,13 +588,25 @@ asynStatus ADScanSim::openScanTiled(const char* nodePath) {
                                              {string("Accept"), string("application/octet-stream")}};
 
             // TODO - Update to use block url read from metadata above
-            cpr::Response data = cpr::Get(cpr::Url{string(arrayURL) + string(nodePath)}, 
-                               cpr::ReserveSize{numElems * bytesPerElem},
-                               //cpr::AcceptEncoding({{"deflate", "gzip", "zlib"}}),
-                               dataHeader);
+
+            char fullURLC[512];
+            sprintf(fullURLC, "%s?block=%d,%d,0,0",dataURL.c_str(), i, j);
+            string fullURL = string(fullURLC);
+
+            cout << fullURL << endl;
             size_t numBytesToCopy = numAcquisitionsPerChunk * numFramesPerChunk * xSize * ySize * bytesPerElem;
+            cout << numBytesToCopy << endl;
+            cpr::Response data = cpr::Get(cpr::Url{fullURL}, 
+                               cpr::ReserveSize{numBytesToCopy * 2},
+                               cpr::AcceptEncoding({{}}),
+                               dataHeader);
+
+            /*cout << data.status_code << endl;
+            cout << data.downloaded_bytes << endl;
+            cout << data.raw_header << endl;*/
+            
+            memcpy((void*) ((uint8_t*) this->scanImageDataBuffer + bufferWriteOffset), (void*) data.text.c_str(), numBytesToCopy);
             bufferWriteOffset += numBytesToCopy;
-            memcpy((uint8_t*) this->scanImageDataBuffer + bufferWriteOffset, (void*) data.text.c_str(), numBytesToCopy);
         }
     }
 
@@ -655,17 +668,26 @@ asynStatus ADScanSim::openScanHDF5(const char* filePath){
 
     }
 
+    // Collect image dataset dimension information.
     hid_t dspace = H5Dget_space(imageDatasetId);
     const int ndims = H5Sget_simple_extent_ndims(dspace);
-
     hsize_t dims[ndims];
-    printf("Detected image dataset with %d dimensions:\n", ndims);
     H5Sget_simple_extent_dims(dspace, dims, NULL);
-    H5Dclose(dspace);
+    H5Sclose(dspace);
 
+    if(ndims == 3) {
+        LOG_ARGS("Detected image dataset with %d dimensions: (%d, %d, %d)", ndims, (int) dims[0], 
+                 (int) dims[1], (int) dims[2]);
+    } else if (ndims == 4) {
+        LOG_ARGS("Detected image dataset with %d dimensions: (%d, %d, %d, %d)", ndims, 
+                 (int) dims[0], (int) dims[1], (int) dims[2], (int) dims[3]);
+    } else {
+        LOG_ARGS("Detected image dataset with %d dimensions.", ndims);
+    }
+
+    // Calculate total number of elements (pixels) in image dataset
     size_t num_elems = 1;
     for(int i = 0; i< ndims; i++){
-        printf("%d\n", dims[i]);
         num_elems = num_elems * dims[i];
     }
 

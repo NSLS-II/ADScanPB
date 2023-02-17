@@ -72,5 +72,7 @@ iocInit()
 create_monitor_set("auto_settings.req", 30, "P=$(PREFIX)")
 
 # Load scan at startup
-#dbpf DEV:SCANSIM-DET1:cam1:ImageDataset "/img_tomo"
+dbpf DEV:SCANSIM-DET1:cam1:ImageDataset "/img_tomo"
+dbpf DEV:SCANSIM-DET1:cam1:DataSource 1
 #dbpf DEV:SCANSIM-DET1:cam1:ScanFilePath "/data/fly_scan_id_6774.h5"
+dbpf DEV:SCANSIM-DET1:cam1:ScanFilePath "/fxi/raw/bdaedffb-5752-43f0-a225-8835bb3e2205/primary/data/Andor_image"
