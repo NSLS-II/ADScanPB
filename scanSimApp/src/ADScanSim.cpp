@@ -195,7 +195,7 @@ void ADScanSim::playbackThread(){
 
     getIntegerParam(NDColorMode, &colorMode);
     getIntegerParam(NDDataType, &dataType);
-    getIntegerParam(ADScanSim_AutoRepeat, &autoRepeat);
+    
     getIntegerParam(ADImageMode, &imageMode);
     getIntegerParam(ADScanSim_NumFrames, &nframes);
 
@@ -220,6 +220,7 @@ void ADScanSim::playbackThread(){
 
     while(playback) {
         double spf;
+        getIntegerParam(ADScanSim_AutoRepeat, &autoRepeat);
         getDoubleParam(ADScanSim_PlaybackRateSPF, &spf);
         getIntegerParam(ADScanSim_PlaybackPos, &playbackPos);
         LOG_ARGS("Playing back frame %d from scan...", playbackPos);
@@ -298,11 +299,9 @@ void ADScanSim::playbackThread(){
         }
 
         else if(playbackPos == nframes){
-            if(autoRepeat == 1)
-                playbackPos = 0;
-            else {
+            playbackPos = 0;
+            if(autoRepeat != 1)
                 playback = false;
-            }
         }
 
         setIntegerParam(ADScanSim_PlaybackPos, playbackPos);
