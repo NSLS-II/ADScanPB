@@ -298,7 +298,7 @@ void ADScanSim::playbackThread(){
             if(desiredImages <= imageCounter) playback = false;
         }
 
-        else if(playbackPos == nframes){
+        if(playbackPos == nframes){
             playbackPos = 0;
             if(autoRepeat != 1)
                 playback = false;
