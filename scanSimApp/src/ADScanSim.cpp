@@ -189,6 +189,9 @@ void ADScanSim::playbackThread(){
     NDArrayInfo arrayInfo;
     int dataType, imageMode, colorMode, ndims, autoRepeat, nframes, arrayCallbacks;
 
+    clock_t start, end;
+    double playbackTime;
+
     // Three different frame counters.
     int playbackPos, imageCounter, totalImageCounter;
 
@@ -219,6 +222,9 @@ void ADScanSim::playbackThread(){
     }
 
     while(playback) {
+
+        start = clock();
+
         double spf;
         getIntegerParam(ADScanSim_AutoRepeat, &autoRepeat);
         getDoubleParam(ADScanSim_PlaybackRateSPF, &spf);
@@ -284,13 +290,16 @@ void ADScanSim::playbackThread(){
 
         pArray->release();
 
-        epicsThreadSleep(spf);
+        end = clock();
+        playbackTime = ((double) (end - start)) / CLOCKS_PER_SEC;
+
+        epicsThreadSleep(spf - playbackTime);
 
         playbackPos++;
 
         if(imageMode == ADImageSingle){
             playback = false;
-        } 
+        }
 
         else if(imageMode == ADImageMultiple) {
             int desiredImages;
@@ -515,15 +524,23 @@ asynStatus ADScanSim::openScanTiled(const char* nodePath) {
     if(!this->tiledApiKey.empty() && strlen(metadataURL) != 0)
         this->tiledConfigured = true;
 
-    if(!this->tiledConfigured){
-        updateStatus("Tiled configuration incomplete!", ADSCANSIM_ERR);
-        return asynError;
-    }
+    if(!this->tiledConfigured)
+        updateStatus("Tiled configuration incomplete!", ADSCANSIM_WARN);
 
     LOG_ARGS("Attempting to load scan from Tiled node: %s", nodePath);
 
-    cpr::Header auth = cpr::Header{{string("Authorization"), "Apikey " +  this->tiledApiKey}};
-    cpr::Response r = cpr::Get(cpr::Url{string(nodePath)}, auth);
+    cpr::Response r;
+    if(this->tiledApiKey.empty()) {
+        r = cpr::Get(cpr::Url{string(nodePath)});
+    } else {
+        cpr::Header auth = cpr::Header{{string("Authorization"), "Apikey " +  this->tiledApiKey}};
+        r = cpr::Get(cpr::Url{string(nodePath)}, auth);
+    }
+
+    if(r.status_code != 200) {
+        updateStatus(r.text.c_str(), ADSCANSIM_ERR);
+        return asynError;
+    }
 
     cout << r.text << endl;
 
@@ -583,8 +600,15 @@ asynStatus ADScanSim::openScanTiled(const char* nodePath) {
             int numAcquisitionsPerChunk = chunks[0][i].get<int>();
             int numFramesPerChunk = chunks[1][j].get<int>();
 
-            cpr::Header dataHeader = cpr::Header{{string("Authorization"), "Apikey " +  this->tiledApiKey}, 
+            cpr::Header dataHeader;
+            if (this->tiledApiKey.empty()) {
+                dataHeader = cpr::Header{{string("Accept"), string("application/octet-stream")}};
+            } else {
+                dataHeader = cpr::Header{{string("Authorization"), "Apikey " +  this->tiledApiKey}, 
                                              {string("Accept"), string("application/octet-stream")}};
+            }
+            
+
 
             // TODO - Update to use block url read from metadata above
 
@@ -595,10 +619,22 @@ asynStatus ADScanSim::openScanTiled(const char* nodePath) {
             cout << fullURL << endl;
             size_t numBytesToCopy = numAcquisitionsPerChunk * numFramesPerChunk * xSize * ySize * bytesPerElem;
             cout << numBytesToCopy << endl;
+
+            char loadingMsg[256];
+            sprintf(loadingMsg, "Loading chunk %d of %d...", (i * secondChunkListLen + j), (firstChunkListLen * secondChunkListLen));
+            updateStatus(loadingMsg, ADSCANSIM_LOG);
+            callParamCallbacks();
+
             cpr::Response data = cpr::Get(cpr::Url{fullURL}, 
                                cpr::ReserveSize{numBytesToCopy * 2},
                                cpr::AcceptEncoding({{}}),
                                dataHeader);
+
+            if(data.status_code != 200) {
+                updateStatus(data.text.c_str(), ADSCANSIM_ERR);
+                free(this->scanImageDataBuffer);
+                return asynError;
+            }
 
             /*cout << data.status_code << endl;
             cout << data.downloaded_bytes << endl;
