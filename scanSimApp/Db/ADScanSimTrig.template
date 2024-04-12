@@ -1,0 +1,53 @@
+
+
+record(bo, "$(P)$(R)TriggerEdge")
+{
+    field(PINI, "YES")
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))TRIG_EDGE")
+    field(VAL,  "0")
+    field(ZNAM, "Rising")
+    field(ONAM, "Falling")
+    info(autosaveFields, "VAL")
+}
+
+record(bi, "$(P)$(R)TriggerEdge_RBV")
+{
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))TRIG_EDGE")
+    field(ZNAM, "Rising")
+    field(ONAM, "Falling")
+    field(SCAN, "I/O Intr")
+}
+
+
+record(calcout, "$(P)$(R)TriggerSignal_RBV")
+{
+    field(DTYP, "asynInt32")
+    field(INPA, "$(TRIGGER_SIGNAL) CA")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))TRIG_SIGNAL")
+    field(ZNAM, "Low")
+    field(ONAM, "High")
+    field(SCAN, "I/O Intr")
+}
+
+record(scalcout, "$(P)$(R)TriggerSignalInputStr")
+{
+    field(DTYP, "Soft Channel")
+    field(INPA, "$(P)$(R)TriggerSource.VAL")
+    field(CALC, "PRINTF('%s CA PP', A)")
+    field(OOPT, "Every Time")
+    field(OUT, "$(P)$(R)TriggerSignal_RBV.INP")
+    field(DOPT, "Use CALC")
+    field(SCAN, "I/O Intr")
+}
+
+record(waveform, "$(P)$(R)TriggerSource")
+{
+    field(DTYP, "asynOctetWrite")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))TRIG_SOURCE")
+    field(FLNK, "$(P)$(R)TriggerSignalInputStr")
+    field(FTVL, "CHAR")
+    field(NELM, "256")
+    field(PINI, "YES")
+}

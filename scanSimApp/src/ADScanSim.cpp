@@ -1,55 +1,53 @@
 /**
- * Main source file for the ADScanSim EPICS driver 
- * 
+ * Main source file for the ADScanSim EPICS driver
+ *
  * This file was initially generated with the help of the ADDriverTemplate:
  * https://github.com/jwlodek/ADDriverTemplate on 23/01/2023
  *
  * This file contains functions for connecting and disconnectiong from the camera,
  * for starting and stopping image acquisition, and for controlling all camera functions through
  * EPICS.
- * 
+ *
  * Author: Jakub Wlodek
- * 
+ *
  * Copyright (c) : Brookhaven National Laboratory, 2023
- * 
+ *
  */
 
 // Standard includes
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-
 // EPICS includes
-#include <epicsTime.h>
-#include <epicsThread.h>
 #include <epicsExit.h>
-#include <epicsString.h>
-#include <epicsStdio.h>
-#include <iocsh.h>
 #include <epicsExport.h>
+#include <epicsStdio.h>
+#include <epicsString.h>
+#include <epicsThread.h>
+#include <epicsTime.h>
+#include <iocsh.h>
 
 #define H5Gcreate_vers 2
 #define H5Dopen_vers 2
 
-#include <stdlib.h>
+#include <hdf5.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <sys/stat.h>
+
 #include <cmath>
 #include <iostream>
 #include <sstream>
-#include <hdf5.h>
-#include <sys/stat.h>
-
 
 // Area Detector include
 #include "ADScanSim.h"
 
 // Error message formatters
-#define ERR(msg)                                                                                 \
-    asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "ERR  | %s::%s: %s\n", driverName, functionName, \
-              msg)
+#define ERR(msg) \
+    asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "ERR  | %s::%s: %s\n", driverName, functionName, msg)
 
-#define ERR_ARGS(fmt, ...)                                                              \
+#define ERR_ARGS(fmt, ...)                                                             \
     asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "ERR  | %s::%s: " fmt "\n", driverName, \
               functionName, __VA_ARGS__);
 
@@ -65,42 +63,39 @@
 #define LOG(msg) \
     asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "LOG  | %s::%s: %s\n", driverName, functionName, msg)
 
-#define LOG_ARGS(fmt, ...)                                                                       \
-    asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "LOG  | %s::%s: " fmt "\n", driverName, functionName, \
-              __VA_ARGS__);
-
+#define LOG_ARGS(fmt, ...)                                                             \
+    asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "LOG  | %s::%s: " fmt "\n", driverName, \
+              functionName, __VA_ARGS__);
 
 using namespace std;
 
 // Add any additional namespaces here
 
-
-const char* driverName = "ADScanSim";
+const char *driverName = "ADScanSim";
 
 // Add any driver constants here
-
 
 // -----------------------------------------------------------------------
 // ADScanSim Utility Functions (Reporting/Logging/ExternalC)
 // -----------------------------------------------------------------------
 
-
 /*
  * External configuration function for ADScanSim.
  * Envokes the constructor to create a new ADScanSim object
  * This is the function that initializes the driver, and is called in the IOC startup script
- * 
- * NOTE: When implementing a new driver with ADDriverTemplate, your camera may use a different connection method than
- * a const char* connectionParam. Just edit the param to fit your device, and make sure to make the same edit to the constructor below
+ *
+ * NOTE: When implementing a new driver with ADDriverTemplate, your camera may use a different
+ * connection method than a const char* connectionParam. Just edit the param to fit your device, and
+ * make sure to make the same edit to the constructor below
  *
  * @params[in]: all passed into constructor
  * @return:     status
  */
-extern "C" int ADScanSimConfig(const char* portName, int maxBuffers, size_t maxMemory, int priority, int stackSize){
+extern "C" int ADScanSimConfig(const char *portName, int maxBuffers, size_t maxMemory, int priority,
+                               int stackSize) {
     new ADScanSim(portName, maxBuffers, maxMemory, priority, stackSize);
-    return(asynSuccess);
+    return (asynSuccess);
 }
-
 
 /*
  * Callback function called when IOC is terminated.
@@ -109,20 +104,19 @@ extern "C" int ADScanSimConfig(const char* portName, int maxBuffers, size_t maxM
  * @params[in]: pPvt -> pointer to the ADDRIVERNAMESTANDATD object created in ADScanSimConfig
  * @return:     void
  */
-static void exitCallbackC(void* pPvt){
-    ADScanSim* pScanSim = (ADScanSim*) pPvt;
-    delete(pScanSim);
+static void exitCallbackC(void *pPvt) {
+    ADScanSim *pScanSim = (ADScanSim *)pPvt;
+    delete (pScanSim);
 }
 
-static void playbackThreadC(void* pPvt){
-    ADScanSim* pScanSim = (ADScanSim*) pPvt;
+static void playbackThreadC(void *pPvt) {
+    ADScanSim *pScanSim = (ADScanSim *)pPvt;
     pScanSim->playbackThread();
 }
 
-
-void ADScanSim::updateStatus(const char* msg, ADScanSimErr_t errLevel){
-    const char* functionName = "updateStatus";
-    switch(errLevel){
+void ADScanSim::updateStatus(const char *msg, ADScanSimErr_t errLevel) {
+    const char *functionName = "updateStatus";
+    switch (errLevel) {
         case ADSCANSIM_LOG:
             LOG(msg);
             break;
@@ -136,35 +130,33 @@ void ADScanSim::updateStatus(const char* msg, ADScanSimErr_t errLevel){
     setStringParam(ADStatusMessage, msg);
 }
 
-
 // -----------------------------------------------------------------------
 // ADScanSim Acquisition Functions
 // -----------------------------------------------------------------------
 
-
 /**
  * Function responsible for starting camera image acqusition. First, check if there is a
- * camera connected. Then, set camera values by reading from PVs. Then, we execute the 
+ * camera connected. Then, set camera values by reading from PVs. Then, we execute the
  * Acquire Start command. if this command was successful, image acquisition started.
- * 
- * @return: status  -> error if no device, camera values not set, or execute command fails. Otherwise, success
+ *
+ * @return: status  -> error if no device, camera values not set, or execute command fails.
+ * Otherwise, success
  */
-asynStatus ADScanSim::acquireStart(){
-    const char* functionName = "acquireStart";
+asynStatus ADScanSim::acquireStart() {
+    const char *functionName = "acquireStart";
     asynStatus status = asynSuccess;
 
     int scanLoaded;
     getIntegerParam(ADScanSim_ScanLoaded, &scanLoaded);
-    if(scanLoaded != 1){
+    if (scanLoaded != 1) {
         updateStatus("Scan has not been loaded for playback!", ADSCANSIM_ERR);
         status = asynError;
     }
 
-    if(status != asynSuccess){
+    if (status != asynSuccess) {
         setIntegerParam(ADAcquire, 0);
         setIntegerParam(ADStatus, ADStatusIdle);
-    }
-    else{
+    } else {
         setIntegerParam(ADStatus, ADStatusAcquire);
         LOG("Image acquistion start");
 
@@ -174,20 +166,21 @@ asynStatus ADScanSim::acquireStart(){
         opts.joinable = 1;
         this->playback = true;
 
-        this->playbackThreadId = epicsThreadCreateOpt("playbackThread", (EPICSTHREADFUNC) playbackThreadC, this, &opts);
-
+        this->playbackThreadId =
+            epicsThreadCreateOpt("playbackThread", (EPICSTHREADFUNC)playbackThreadC, this, &opts);
     }
 
     return status;
 }
 
+void ADScanSim::playbackThread() {
+    const char *functionName = "playbackThread";
 
-void ADScanSim::playbackThread(){
-    const char* functionName = "playbackThread";
-
-    NDArray* pArray;
+    NDArray *pArray;
     NDArrayInfo arrayInfo;
-    int dataType, imageMode, colorMode, ndims, autoRepeat, nframes, arrayCallbacks;
+    int dataType, imageMode, colorMode, ndims, autoRepeat, nframes, arrayCallbacks, trigSignal;
+    ADScanSimTrigMode_t trigMode;
+    ADScanSimTrigEdge_t trigEdge;
 
     clock_t start, end;
     double playbackTime;
@@ -195,35 +188,50 @@ void ADScanSim::playbackThread(){
     // Three different frame counters.
     int playbackPos, imageCounter, totalImageCounter;
 
-
     getIntegerParam(NDColorMode, &colorMode);
     getIntegerParam(NDDataType, &dataType);
-    
+
     getIntegerParam(ADImageMode, &imageMode);
     getIntegerParam(ADScanSim_NumFrames, &nframes);
 
+    getIntegerParam(ADTriggerMode, (int *)&trigMode);
+    getIntegerParam(ADScanSim_ExtTriggerEdge, (int *)&trigEdge);
 
     int width, height;
     getIntegerParam(ADMaxSizeX, &width);
     getIntegerParam(ADMaxSizeY, &height);
 
-    if((NDColorMode_t) colorMode == NDColorModeMono) ndims = 2;
-    else ndims = 3;
+    if ((NDColorMode_t)colorMode == NDColorModeMono)
+        ndims = 2;
+    else
+        ndims = 3;
 
     size_t dims[ndims];
-    if(ndims == 2){
+    if (ndims == 2) {
         dims[0] = width;
         dims[1] = height;
-    }
-    else{
+    } else {
         dims[0] = 3;
         dims[1] = width;
         dims[2] = height;
     }
 
-    while(playback) {
-
+    while (playback) {
         start = clock();
+        int lastSignal;
+        getIntegerParam(ADScanSim_ExtTriggerSignal, &trigSignal);
+        lastSignal = trigSignal;
+
+        if (trigMode != ADSCANSIM_TRIG_INTERNAL) {
+            LOG("Waiting for trigger");
+
+            while (!(lastSignal != trigSignal && trigSignal == (int)trigEdge)) {
+                getIntegerParam(ADScanSim_ExtTriggerSignal, &trigSignal);
+                if (lastSignal != trigSignal) lastSignal = trigSignal;
+            }
+            LOG_ARGS("Recieved %s edge trigger.",
+                     trigEdge == ADSCANSIM_EDGE_RISING ? "rising" : "falling");
+        }
 
         double spf;
         getIntegerParam(ADScanSim_AutoRepeat, &autoRepeat);
@@ -232,31 +240,32 @@ void ADScanSim::playbackThread(){
         LOG_ARGS("Playing back frame %d from scan...", playbackPos);
 
         // allocate memory for a new NDArray, and set pArray to a pointer for this memory
-        this->pArrays[0] = pNDArrayPool->alloc(ndims, dims, (NDDataType_t) dataType, 0, NULL);
-    
-        if(this->pArrays[0]!=NULL){ 
+        this->pArrays[0] = pNDArrayPool->alloc(ndims, dims, (NDDataType_t)dataType, 0, NULL);
+
+        if (this->pArrays[0] != NULL) {
             pArray = this->pArrays[0];
-        }
-        else{
+        } else {
             this->pArrays[0]->release();
-            asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
-                    "%s::%s Unable to allocate array\n", driverName, functionName);
+            asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, "%s::%s Unable to allocate array\n",
+                      driverName, functionName);
             return;
         }
 
         updateTimeStamp(&pArray->epicsTS);
 
         size_t num_elems = 1;
-        for(int i = 0; i< ndims; i++){
+        for (int i = 0; i < ndims; i++) {
             num_elems = num_elems * dims[i];
         }
 
         size_t totalBytes = num_elems;
-        if(dataType == NDUInt8) {
-            memcpy(pArray->pData, (uint8_t*) this->scanImageDataBuffer + (num_elems * (playbackPos)), num_elems);
+        if (dataType == NDUInt8) {
+            memcpy(pArray->pData,
+                   (uint8_t *)this->scanImageDataBuffer + (num_elems * (playbackPos)), num_elems);
         } else {
             totalBytes = totalBytes * 2;
-            memcpy(pArray->pData, (uint16_t*) this->scanImageDataBuffer + (num_elems * (playbackPos)), totalBytes);
+            memcpy(pArray->pData,
+                   (uint16_t *)this->scanImageDataBuffer + (num_elems * (playbackPos)), totalBytes);
         }
 
         pArray->pAttributeList->add("ColorMode", "Color Mode", NDAttrInt32, &colorMode);
@@ -264,7 +273,6 @@ void ADScanSim::playbackThread(){
         getIntegerParam(NDArrayCounter, &imageCounter);
         imageCounter++;
         setIntegerParam(NDArrayCounter, imageCounter);
-
 
         getIntegerParam(ADNumImagesCounter, &totalImageCounter);
         totalImageCounter++;
@@ -276,46 +284,43 @@ void ADScanSim::playbackThread(){
         setIntegerParam(NDArraySize, totalBytes);
 
         // If we don't have a timestamp buffer loaded, create new timestamp
-        if(this->scanTimestampDataBuffer == NULL) {
-            pArray->timeStamp = (double)pArray->epicsTS.secPastEpoch 
-                      + ((double)pArray->epicsTS.nsec * 1.0e-9);
+        if (this->scanTimestampDataBuffer == NULL) {
+            pArray->timeStamp =
+                (double)pArray->epicsTS.secPastEpoch + ((double)pArray->epicsTS.nsec * 1.0e-9);
         } else {
-            pArray->timeStamp = *((double*) this->scanTimestampDataBuffer + playbackPos); 
+            pArray->timeStamp = *((double *)this->scanTimestampDataBuffer + playbackPos);
         }
 
-
         getIntegerParam(NDArrayCallbacks, &arrayCallbacks);
-        if(arrayCallbacks)
-            doCallbacksGenericPointer(pArray, NDArrayData, 0);
+        if (arrayCallbacks) doCallbacksGenericPointer(pArray, NDArrayData, 0);
 
         pArray->release();
 
         end = clock();
-        playbackTime = ((double) (end - start)) / CLOCKS_PER_SEC;
+        playbackTime = ((double)(end - start)) / CLOCKS_PER_SEC;
 
         epicsThreadSleep(spf - playbackTime);
 
         playbackPos++;
 
-        if(imageMode == ADImageSingle){
+        if (imageMode == ADImageSingle) {
             playback = false;
         }
 
-        else if(imageMode == ADImageMultiple) {
+        else if (imageMode == ADImageMultiple) {
             int desiredImages;
             getIntegerParam(ADNumImages, &desiredImages);
-            if(desiredImages <= imageCounter) playback = false;
+            if (desiredImages <= imageCounter) playback = false;
         }
 
-        if(playbackPos == nframes){
+        if (playbackPos == nframes) {
             playbackPos = 0;
-            if(autoRepeat != 1)
-                playback = false;
+            if (autoRepeat != 1) playback = false;
         }
 
         setIntegerParam(ADScanSim_PlaybackPos, playbackPos);
 
-        if(!playback){
+        if (!playback) {
             setIntegerParam(ADAcquire, 0);
             setIntegerParam(ADStatus, ADStatusIdle);
         }
@@ -323,20 +328,19 @@ void ADScanSim::playbackThread(){
     }
 }
 
-
-
 /**
- * Function responsible for stopping camera image acquisition. First check if the camera is connected.
- * If it is, execute the 'AcquireStop' command. Then set the appropriate PV values, and callParamCallbacks
- * 
+ * Function responsible for stopping camera image acquisition. First check if the camera is
+ * connected. If it is, execute the 'AcquireStop' command. Then set the appropriate PV values, and
+ * callParamCallbacks
+ *
  * @return: status  -> error if no camera or command fails to execute, success otherwise
- */ 
-asynStatus ADScanSim::acquireStop(){
-    const char* functionName = "acquireStop";
+ */
+asynStatus ADScanSim::acquireStop() {
+    const char *functionName = "acquireStop";
     asynStatus status = asynSuccess;
 
     // Stop acquistion and join back the playback thread
-    if(this->playback){
+    if (this->playback) {
         this->playback = false;
         epicsThreadMustJoin(this->playbackThreadId);
     }
@@ -349,44 +353,36 @@ asynStatus ADScanSim::acquireStop(){
 
 // Here, you will need three functions:
 // * A function for converting the images supplied by vendor software into areaDetector NDArrays
-// * A function that converts the data type and color mode of the vendor software supplied image structure into areaDetector NDDataType_t and NDColorMode_t
-// * A function for that takes a pointer to a vendor software image data structure (your callback function - runs once per image)
-// 
-// If the vendor software is expecting a static function pointer as the callback parameter, you can create a static function with a void pointer as an argument
-// cast that void pointer to type ADScanSim*, and call the callback function
-
-
-
-
-
+// * A function that converts the data type and color mode of the vendor software supplied image
+// structure into areaDetector NDDataType_t and NDColorMode_t
+// * A function for that takes a pointer to a vendor software image data structure (your callback
+// function - runs once per image)
+//
+// If the vendor software is expecting a static function pointer as the callback parameter, you can
+// create a static function with a void pointer as an argument cast that void pointer to type
+// ADScanSim*, and call the callback function
 
 //---------------------------------------------------------
 // Base ScanSim Camera functionality
 //---------------------------------------------------------
 
-
 //  Add functions for getting/setting various camera settings (gain, exposure etc.) here
 
+asynStatus ADScanSim::connect(asynUser *pasynUser) { return asynSuccess; }
 
-asynStatus ADScanSim::connect(asynUser* pasynUser){
-    return asynSuccess;
-}
-
-asynStatus ADScanSim::disconnect(asynUser* pasynUser){
-    const char* functionName = "disconnect";
+asynStatus ADScanSim::disconnect(asynUser *pasynUser) {
+    const char *functionName = "disconnect";
     asynStatus status = pasynManager->exceptionDisconnect(this->pasynUserSelf);
     if (status) {
-        ERR_ARGS("error calling pasynManager->exceptionDisconnect, error=%s", pasynUserSelf->errorMessage);
+        ERR_ARGS("error calling pasynManager->exceptionDisconnect, error=%s",
+                 pasynUserSelf->errorMessage);
     }
     return status;
 }
 
-
 //-------------------------------------------------------------------------
 // ADDriver function overwrites
 //-------------------------------------------------------------------------
-
-
 
 /*
  * Function overwriting ADDriver base function.
@@ -396,68 +392,65 @@ asynStatus ADScanSim::disconnect(asynUser* pasynUser){
  * @params[in]: value           -> int32 value to write
  * @return: asynStatus      -> success if write was successful, else failure
  */
-asynStatus ADScanSim::writeInt32(asynUser* pasynUser, epicsInt32 value){
+asynStatus ADScanSim::writeInt32(asynUser *pasynUser, epicsInt32 value) {
     int function = pasynUser->reason;
     int acquiring;
     asynStatus status = asynSuccess;
-    static const char* functionName = "writeInt32";
+    static const char *functionName = "writeInt32";
     getIntegerParam(ADAcquire, &acquiring);
 
     status = setIntegerParam(function, value);
     // start/stop acquisition
-    if(function == ADAcquire){
-        if(value && !acquiring){
+    if (function == ADAcquire) {
+        if (value && !acquiring) {
             status = acquireStart();
-            if(status == asynError){
+            if (status == asynError) {
                 updateStatus("Failed to start acquisition", ADSCANSIM_ERR);
                 status = asynError;
             }
         }
-        if(!value && acquiring){
+        if (!value && acquiring) {
             status = acquireStop();
         }
-    } else if(function == ADScanSim_ResetPlaybackPos) {
+    } else if (function == ADScanSim_ResetPlaybackPos) {
         setIntegerParam(ADScanSim_PlaybackPos, 0);
-    } else if(function == ADImageMode){
-        if(acquiring == 1) acquireStop();
-    } else if(function == NDDataType || function == NDColorMode){
+    } else if (function == ADImageMode) {
+        if (acquiring == 1) acquireStop();
+    } else if (function == NDDataType || function == NDColorMode) {
         updateStatus("Color mode and data type are read from loaded scan", ADSCANSIM_ERR);
         status = asynError;
-    } else if(function == ADStatus) {
-        if(value == ADStatusIdle) printf("SAW STAT TO IDLE");
-    } else{
+    } else if (function == ADStatus) {
+        if (value == ADStatusIdle) printf("SAW STAT TO IDLE");
+    } else {
         if (function < ADSCANSIM_FIRST_PARAM) {
             status = ADDriver::writeInt32(pasynUser, value);
         }
     }
     callParamCallbacks();
 
-    if(status){
+    if (status) {
         ERR_ARGS("status=%d, function=%d, value=%d", status, function, value);
         return asynError;
-    }
-    else LOG_ARGS("function=%d value=%d", function, value);
+    } else
+        LOG_ARGS("function=%d value=%d", function, value);
     return status;
 }
 
-
-void ADScanSim::setPlaybackRate(int rateFormat){
-    const char* functionName = "setPlaybackRate";
+void ADScanSim::setPlaybackRate(int rateFormat) {
+    const char *functionName = "setPlaybackRate";
     double fps, spf;
 
-
-    if(rateFormat == ADScanSim_PlaybackRateFPS){
+    if (rateFormat == ADScanSim_PlaybackRateFPS) {
         getDoubleParam(rateFormat, &fps);
         spf = 1 / fps;
         setDoubleParam(ADScanSim_PlaybackRateSPF, spf);
-    } else{
+    } else {
         getDoubleParam(rateFormat, &spf);
         fps = 1 / spf;
         setDoubleParam(ADScanSim_PlaybackRateFPS, fps);
     }
     LOG_ARGS("User set playback FPS to %lf, or %lf seconds per frame.", fps, spf);
 }
-
 
 /*
  * Function overwriting ADDriver base function.
@@ -468,76 +461,69 @@ void ADScanSim::setPlaybackRate(int rateFormat){
  * @params[in]: value           -> int32 value to write
  * @return: asynStatus      -> success if write was successful, else failure
  */
-asynStatus ADScanSim::writeFloat64(asynUser* pasynUser, epicsFloat64 value){
+asynStatus ADScanSim::writeFloat64(asynUser *pasynUser, epicsFloat64 value) {
     int function = pasynUser->reason;
     int acquiring;
     asynStatus status = asynSuccess;
-    static const char* functionName = "writeFloat64";
+    static const char *functionName = "writeFloat64";
     getIntegerParam(ADAcquire, &acquiring);
 
     status = setDoubleParam(function, value);
 
-    if(function == ADScanSim_PlaybackRateFPS || function == ADScanSim_PlaybackRateSPF){
+    if (function == ADScanSim_PlaybackRateFPS || function == ADScanSim_PlaybackRateSPF) {
         setPlaybackRate(function);
-    }
-    else{
-        if(function < ADSCANSIM_FIRST_PARAM){
+    } else {
+        if (function < ADSCANSIM_FIRST_PARAM) {
             status = ADDriver::writeFloat64(pasynUser, value);
         }
     }
     callParamCallbacks();
 
-    if(status){
+    if (status) {
         ERR_ARGS("status = %d, function =%d, value = %f", status, function, value);
         return asynError;
-    }
-    else LOG_ARGS("function=%d value=%f", function, value);
+    } else
+        LOG_ARGS("function=%d value=%f", function, value);
     return status;
 }
 
-
-void ADScanSim::closeScan(){
+void ADScanSim::closeScan() {
     // If acquiring, stop acquiring first.
-    if(this->playback)
-        acquireStop();
+    if (this->playback) acquireStop();
 
     // clear out buffers if they have been allocated
-    if(this->scanImageDataBuffer != NULL)
-        free(this->scanImageDataBuffer);
+    if (this->scanImageDataBuffer != NULL) free(this->scanImageDataBuffer);
 
-    if(this->scanTimestampDataBuffer != NULL)
-        free(this->scanTimestampDataBuffer);
+    if (this->scanTimestampDataBuffer != NULL) free(this->scanTimestampDataBuffer);
 
     setIntegerParam(ADScanSim_ScanLoaded, 0);
     callParamCallbacks();
 }
 
 #ifdef ADSCANSIM_WITH_TILED_SUPPORT
-asynStatus ADScanSim::openScanTiled(const char* nodePath) {
-    const char* functionName = "openScanTiled";
+asynStatus ADScanSim::openScanTiled(const char *nodePath) {
+    const char *functionName = "openScanTiled";
     asynStatus status = asynSuccess;
 
     char metadataURL[256];
     getStringParam(ADScanSim_TiledMetadataURL, 256, metadataURL);
     printf("%s\n", metadataURL);
 
-    if(!this->tiledApiKey.empty() && strlen(metadataURL) != 0)
-        this->tiledConfigured = true;
+    if (!this->tiledApiKey.empty() && strlen(metadataURL) != 0) this->tiledConfigured = true;
 
-    if(!this->tiledConfigured)
-        updateStatus("Tiled configuration incomplete!", ADSCANSIM_WARN);
+    if (!this->tiledConfigured) updateStatus("Tiled configuration incomplete!", ADSCANSIM_WARN);
 
     LOG_ARGS("Attempting to load scan from Tiled node: %s", nodePath);
 
     cpr::Response r;
-    if(this->tiledApiKey.empty()) {
+    if (this->tiledApiKey.empty()) {
         r = cpr::Get(cpr::Url{string(nodePath)});
     } else {
-        cpr::Header auth = cpr::Header{{string("Authorization"), "Apikey " +  this->tiledApiKey}};
+        cpr::Header auth = cpr::Header{{string("Authorization"), "Apikey " + this->tiledApiKey}};
         r = cpr::Get(cpr::Url{string(nodePath)}, auth);
     }
 
-    if(r.status_code != 200) {
+    if (r.status_code != 200) {
         updateStatus(r.text.c_str(), ADSCANSIM_ERR);
         return asynError;
     }
@@ -550,19 +536,20 @@ asynStatus ADScanSim::openScanTiled(const char* nodePath) {
     int numFrames = scanShape[1].get<int>() * numAcquistions;
     int ySize = scanShape[2].get<int>();
     int xSize = scanShape[3].get<int>();
-    int bytesPerElem = metadata_j["data"]["attributes"]["structure"]["micro"]["itemsize"].get<int>();
+    int bytesPerElem =
+        metadata_j["data"]["attributes"]["structure"]["micro"]["itemsize"].get<int>();
     json chunks = metadata_j["data"]["attributes"]["structure"]["macro"]["chunks"];
 
     string dataURL = metadata_j["data"]["links"]["block"];
-    char* dataURLToken = strtok((char*) dataURL.c_str(), "?");
+    char *dataURLToken = strtok((char *)dataURL.c_str(), "?");
     dataURL = string(dataURLToken);
     cout << dataURL << endl;
 
     // determine whether or not the image data is in color or not.
-    //if(colorChannels == 3){
+    // if(colorChannels == 3){
     //    setIntegerParam(NDColorMode, NDColorModeRGB1);
     //} else {
-        setIntegerParam(NDColorMode, NDColorModeMono);
+    setIntegerParam(NDColorMode, NDColorModeMono);
     //}
 
     updateStatus("Loading scan from URL...", ADSCANSIM_LOG);
@@ -576,9 +563,9 @@ asynStatus ADScanSim::openScanTiled(const char* nodePath) {
 
     size_t numElems = numFrames * ySize * xSize;
 
-    if(bytesPerElem == 1) {
+    if (bytesPerElem == 1) {
         setIntegerParam(NDDataType, NDUInt8);
-    } else if(bytesPerElem == 2) {
+    } else if (bytesPerElem == 2) {
         setIntegerParam(NDDataType, NDUInt16);
     } else {
         updateStatus("Couldn't read image dataset data type!", ADSCANSIM_ERR);
@@ -594,9 +581,8 @@ asynStatus ADScanSim::openScanTiled(const char* nodePath) {
     int firstChunkListLen = chunks[0].size();
     int secondChunkListLen = chunks[1].size();
     size_t bufferWriteOffset = 0;
-    for(int i = 0; i< firstChunkListLen; i++) {
-        for(int j = 0; j< secondChunkListLen; j++) {
-
+    for (int i = 0; i < firstChunkListLen; i++) {
+        for (int j = 0; j < secondChunkListLen; j++) {
             int numAcquisitionsPerChunk = chunks[0][i].get<int>();
             int numFramesPerChunk = chunks[1][j].get<int>();
 
@@ -604,33 +590,31 @@ asynStatus ADScanSim::openScanTiled(const char* nodePath) {
             if (this->tiledApiKey.empty()) {
                 dataHeader = cpr::Header{{string("Accept"), string("application/octet-stream")}};
             } else {
-                dataHeader = cpr::Header{{string("Authorization"), "Apikey " +  this->tiledApiKey}, 
-                                             {string("Accept"), string("application/octet-stream")}};
+                dataHeader = cpr::Header{{string("Authorization"), "Apikey " + this->tiledApiKey},
+                                         {string("Accept"), string("application/octet-stream")}};
             }
-            
-
 
             // TODO - Update to use block url read from metadata above
 
             char fullURLC[512];
-            sprintf(fullURLC, "%s?block=%d,%d,0,0",dataURL.c_str(), i, j);
+            sprintf(fullURLC, "%s?block=%d,%d,0,0", dataURL.c_str(), i, j);
             string fullURL = string(fullURLC);
 
             cout << fullURL << endl;
-            size_t numBytesToCopy = numAcquisitionsPerChunk * numFramesPerChunk * xSize * ySize * bytesPerElem;
+            size_t numBytesToCopy =
+                numAcquisitionsPerChunk * numFramesPerChunk * xSize * ySize * bytesPerElem;
             cout << numBytesToCopy << endl;
 
             char loadingMsg[256];
-            sprintf(loadingMsg, "Loading chunk %d of %d...", (i * secondChunkListLen + j), (firstChunkListLen * secondChunkListLen));
+            sprintf(loadingMsg, "Loading chunk %d of %d...", (i * secondChunkListLen + j),
+                    (firstChunkListLen * secondChunkListLen));
             updateStatus(loadingMsg, ADSCANSIM_LOG);
             callParamCallbacks();
 
-            cpr::Response data = cpr::Get(cpr::Url{fullURL}, 
-                               cpr::ReserveSize{numBytesToCopy * 2},
-                               cpr::AcceptEncoding({{}}),
-                               dataHeader);
+            cpr::Response data = cpr::Get(cpr::Url{fullURL}, cpr::ReserveSize{numBytesToCopy * 2},
+                                          cpr::AcceptEncoding({{}}), dataHeader);
 
-            if(data.status_code != 200) {
+            if (data.status_code != 200) {
                 updateStatus(data.text.c_str(), ADSCANSIM_ERR);
                 free(this->scanImageDataBuffer);
                 return asynError;
@@ -639,13 +623,12 @@ asynStatus ADScanSim::openScanTiled(const char* nodePath) {
             /*cout << data.status_code << endl;
             cout << data.downloaded_bytes << endl;
             cout << data.raw_header << endl;*/
-            
-            memcpy((void*) ((uint8_t*) this->scanImageDataBuffer + bufferWriteOffset), (void*) data.text.c_str(), numBytesToCopy);
+
+            memcpy((void *)((uint8_t *)this->scanImageDataBuffer + bufferWriteOffset),
+                   (void *)data.text.c_str(), numBytesToCopy);
             bufferWriteOffset += numBytesToCopy;
         }
     }
-
-
 
     updateStatus("Done", ADSCANSIM_LOG);
     setIntegerParam(ADScanSim_ScanLoaded, 1);
@@ -654,17 +637,15 @@ asynStatus ADScanSim::openScanTiled(const char* nodePath) {
 }
 #endif
 
-asynStatus ADScanSim::openScanHDF5(const char* filePath){
-
-    const char* functionName = "openScanHDF5";
+asynStatus ADScanSim::openScanHDF5(const char *filePath) {
+    const char *functionName = "openScanHDF5";
     asynStatus status = asynSuccess;
 
     hid_t fileId, imageDatasetId, tsDatasetId;
 
-
     LOG_ARGS("Attempting to open HDF5 file: %s", filePath);
 
-    // Open H5 file and 
+    // Open H5 file and
     fileId = H5Fopen(filePath, H5F_ACC_RDONLY, H5P_DEFAULT);
 
     if (fileId < 0) {
@@ -673,22 +654,22 @@ asynStatus ADScanSim::openScanHDF5(const char* filePath){
     }
 
     char imageDataset[256];
-    getStringParam(ADScanSim_ImageDataset, 256, (char*) imageDataset);
+    getStringParam(ADScanSim_ImageDataset, 256, (char *)imageDataset);
 
     imageDatasetId = H5Dopen(fileId, imageDataset, H5P_DEFAULT);
 
-    if(imageDatasetId < 0){
+    if (imageDatasetId < 0) {
         updateStatus("Image dataset not found in file!", ADSCANSIM_ERR);
         H5Fclose(fileId);
         return asynError;
     }
 
     char timestampDataset[256];
-    getStringParam(ADScanSim_TSDataset, 256, (char*) timestampDataset);
-    if(strlen(timestampDataset) > 0){
+    getStringParam(ADScanSim_TSDataset, 256, (char *)timestampDataset);
+    if (strlen(timestampDataset) > 0) {
         tsDatasetId = H5Dopen(fileId, timestampDataset, H5P_DEFAULT);
 
-        if(tsDatasetId < 0){
+        if (tsDatasetId < 0) {
             WARN("Timestamp dataset could not be opened");
         } else {
             hid_t dspace = H5Dget_space(tsDatasetId);
@@ -697,10 +678,10 @@ asynStatus ADScanSim::openScanHDF5(const char* filePath){
             H5Dclose(dspace);
 
             scanTimestampDataBuffer = calloc(dims[0], sizeof(double));
-            H5Dread(tsDatasetId, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, (double*) this->scanTimestampDataBuffer);
+            H5Dread(tsDatasetId, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                    (double *)this->scanTimestampDataBuffer);
             H5Dclose(tsDatasetId);
         }
-
     }
 
     // Collect image dataset dimension information.
@@ -710,19 +691,19 @@ asynStatus ADScanSim::openScanHDF5(const char* filePath){
     H5Sget_simple_extent_dims(dspace, dims, NULL);
     H5Sclose(dspace);
 
-    if(ndims == 3) {
-        LOG_ARGS("Detected image dataset with %d dimensions: (%d, %d, %d)", ndims, (int) dims[0], 
-                 (int) dims[1], (int) dims[2]);
+    if (ndims == 3) {
+        LOG_ARGS("Detected image dataset with %d dimensions: (%d, %d, %d)", ndims, (int)dims[0],
+                 (int)dims[1], (int)dims[2]);
     } else if (ndims == 4) {
-        LOG_ARGS("Detected image dataset with %d dimensions: (%d, %d, %d, %d)", ndims, 
-                 (int) dims[0], (int) dims[1], (int) dims[2], (int) dims[3]);
+        LOG_ARGS("Detected image dataset with %d dimensions: (%d, %d, %d, %d)", ndims, (int)dims[0],
+                 (int)dims[1], (int)dims[2], (int)dims[3]);
     } else {
         LOG_ARGS("Detected image dataset with %d dimensions.", ndims);
     }
 
     // Calculate total number of elements (pixels) in image dataset
     size_t num_elems = 1;
-    for(int i = 0; i< ndims; i++){
+    for (int i = 0; i < ndims; i++) {
         num_elems = num_elems * dims[i];
     }
 
@@ -733,13 +714,13 @@ asynStatus ADScanSim::openScanHDF5(const char* filePath){
 
     // First three channels are always the num frames, height, and then width
     setIntegerParam(ADScanSim_NumFrames, numFrames);
-    setIntegerParam(ADMaxSizeX, (int) dims[2]);
-    setIntegerParam(ADSizeX, (int) dims[2]);
-    setIntegerParam(ADMaxSizeY, (int) dims[1]);
-    setIntegerParam(ADSizeY, (int) dims[1]);
+    setIntegerParam(ADMaxSizeX, (int)dims[2]);
+    setIntegerParam(ADSizeX, (int)dims[2]);
+    setIntegerParam(ADMaxSizeY, (int)dims[1]);
+    setIntegerParam(ADSizeY, (int)dims[1]);
 
     // determine whether or not the image data is in color or not.
-    if(ndims == 4){
+    if (ndims == 4) {
         setIntegerParam(NDColorMode, NDColorModeRGB1);
     } else {
         setIntegerParam(NDColorMode, NDColorModeMono);
@@ -748,10 +729,10 @@ asynStatus ADScanSim::openScanHDF5(const char* filePath){
     // Determine datatype of image data, and populate corresponding PVs
     hid_t h5_dtype = H5Dget_type(imageDatasetId);
     size_t dtype_size;
-    if(H5Tequal(h5_dtype, H5T_NATIVE_UINT8) || H5Tequal(h5_dtype, H5T_NATIVE_UCHAR)) {
+    if (H5Tequal(h5_dtype, H5T_NATIVE_UINT8) || H5Tequal(h5_dtype, H5T_NATIVE_UCHAR)) {
         setIntegerParam(NDDataType, NDUInt8);
         dtype_size = sizeof(uint8_t);
-    } else if(H5Tequal(h5_dtype, H5T_NATIVE_UINT16)) {
+    } else if (H5Tequal(h5_dtype, H5T_NATIVE_UINT16)) {
         setIntegerParam(NDDataType, NDUInt16);
         dtype_size = sizeof(uint16_t);
     } else {
@@ -778,45 +759,43 @@ asynStatus ADScanSim::openScanHDF5(const char* filePath){
     setIntegerParam(ADScanSim_ScanLoaded, 1);
     callParamCallbacks();
     return status;
-
 }
 
-
-asynStatus ADScanSim::writeOctet(asynUser* pasynUser, const char* value, size_t nChars, size_t* nActual){
-    int addr=0;
+asynStatus ADScanSim::writeOctet(asynUser *pasynUser, const char *value, size_t nChars,
+                                 size_t *nActual) {
+    int addr = 0;
     int function = pasynUser->reason;
     asynStatus status = asynSuccess;
     const char *functionName = "writeOctet";
 
-    status = getAddress(pasynUser, &addr); if (status != asynSuccess) return(status);
+    status = getAddress(pasynUser, &addr);
+    if (status != asynSuccess) return (status);
     // Set the parameter in the parameter library.
     status = (asynStatus)setStringParam(addr, function, (char *)value);
-    if (status != asynSuccess) return(status);
+    if (status != asynSuccess) return (status);
 
     if (function == ADScanSim_ScanFilePath) {
         if ((nChars > 0) && (value[0] != 0)) {
-            
             // If we have a scan loaded already, close it out first
             int scanLoaded;
             getIntegerParam(ADScanSim_ScanLoaded, &scanLoaded);
-            if(scanLoaded == 1)
-                closeScan();
+            if (scanLoaded == 1) closeScan();
 
             int dataSource;
             getIntegerParam(ADScanSim_DataSource, &dataSource);
-            if(dataSource == 0)
-                status = this->openScanHDF5(value);
+            if (dataSource == 0) status = this->openScanHDF5(value);
 #ifdef ADSCANSIM_WITH_TILED_SUPPORT
-            else if(dataSource == 1)
+            else if (dataSource == 1)
                 status = this->openScanTiled(value);
 #endif
             else
-                updateStatus("Selected data source not supported in current ADScanSim build!", ADSCANSIM_ERR);
+                updateStatus("Selected data source not supported in current ADScanSim build!",
+                             ADSCANSIM_ERR);
         }
     }
 
     else if (function < ADSCANSIM_FIRST_PARAM) {
-          /* If this parameter belongs to a base class call its method */
+        /* If this parameter belongs to a base class call its method */
         status = ADDriver::writeOctet(pasynUser, value, nChars, nActual);
     }
     // Do callbacks so higher layers see any changes
@@ -826,23 +805,21 @@ asynStatus ADScanSim::writeOctet(asynUser* pasynUser, const char* value, size_t 
     return status;
 }
 
-
-
 /*
  * Function used for reporting ADScanSim device and library information to a external
  * log file. The function first prints all libuvc specific information to the file,
  * then continues on to the base ADDriver 'report' function
- * 
+ *
  * @params[in]: fp      -> pointer to log file
  * @params[in]: details -> number of details to write to the file
  * @return: void
  */
-void ADScanSim::report(FILE* fp, int details){
-    const char* functionName = "report";
+void ADScanSim::report(FILE *fp, int details) {
+    const char *functionName = "report";
     int height;
     int width;
     LOG("Reporting to external log file");
-    if(details > 0){
+    if (details > 0) {
         fprintf(fp, " Connected Device Information\n");
         getIntegerParam(ADSizeX, &width);
         getIntegerParam(ADSizeY, &height);
@@ -850,24 +827,22 @@ void ADScanSim::report(FILE* fp, int details){
         fprintf(fp, " Image Height          ->      %d\n", height);
         fprintf(fp, " -------------------------------------------------------------------\n");
         fprintf(fp, "\n");
-        
+
         ADDriver::report(fp, details);
     }
 }
-
-
-
 
 //----------------------------------------------------------------------------
 // ADScanSim Constructor/Destructor
 //----------------------------------------------------------------------------
 
+ADScanSim::ADScanSim(const char *portName, int maxBuffers, size_t maxMemory, int priority,
+                     int stackSize)
+    : ADDriver(portName, 1, (int)NUM_SCANSIM_PARAMS, maxBuffers, maxMemory, asynEnumMask,
+               asynEnumMask, ASYN_CANBLOCK, 1, priority, stackSize) {
+    static const char *functionName = "ADScanSim";
 
-ADScanSim::ADScanSim(const char* portName, int maxBuffers, size_t maxMemory, int priority, int stackSize )
-    : ADDriver(portName, 1, (int)NUM_SCANSIM_PARAMS, maxBuffers, maxMemory, asynEnumMask, asynEnumMask, ASYN_CANBLOCK, 1, priority, stackSize){
-    static const char* functionName = "ADScanSim";
-
-    // Call createParam here for all of your 
+    // Call createParam here for all of your
     // ex. createParam(ADUVC_UVCComplianceLevelString, asynParamInt32, &ADUVC_UVCComplianceLevel);
 
     LOG("Intializing Scan Simulator...");
@@ -880,7 +855,6 @@ ADScanSim::ADScanSim(const char* portName, int maxBuffers, size_t maxMemory, int
     createParam(ADScanSim_ScanFilePathString, asynParamOctet, &ADScanSim_ScanFilePath);
 #ifdef ADSCANSIM_WITH_TILED_SUPPORT
     createParam(ADScanSim_TiledMetadataURLString, asynParamOctet, &ADScanSim_TiledMetadataURL);
-    createParam(ADScanSim_TiledArrayURLString, asynParamOctet, &ADScanSim_TiledArrayURL);
 #endif
     createParam(ADScanSim_DataSourceString, asynParamInt32, &ADScanSim_DataSource);
     createParam(ADScanSim_ImageDatasetString, asynParamOctet, &ADScanSim_ImageDataset);
@@ -891,13 +865,15 @@ ADScanSim::ADScanSim(const char* portName, int maxBuffers, size_t maxMemory, int
     createParam(ADScanSim_ResetPlaybackPosString, asynParamInt32, &ADScanSim_ResetPlaybackPos);
     createParam(ADScanSim_NumFramesString, asynParamInt32, &ADScanSim_NumFrames);
 
-    // Sets driver version PV (version numbers defined in header file) 
+    // Sets driver version PV (version numbers defined in header file)
     char versionString[25];
-    epicsSnprintf(versionString, sizeof(versionString), "%d.%d.%d", ADSCANSIM_VERSION, ADSCANSIM_REVISION, ADSCANSIM_MODIFICATION);
+    epicsSnprintf(versionString, sizeof(versionString), "%d.%d.%d", ADSCANSIM_VERSION,
+                  ADSCANSIM_REVISION, ADSCANSIM_MODIFICATION);
     setStringParam(NDDriverVersion, versionString);
 
     char h5versionString[25];
-    epicsSnprintf(h5versionString, sizeof(h5versionString), "%d.%d.%d", H5_VERS_MAJOR, H5_VERS_MINOR, H5_VERS_RELEASE);
+    epicsSnprintf(h5versionString, sizeof(h5versionString), "%d.%d.%d", H5_VERS_MAJOR,
+                  H5_VERS_MINOR, H5_VERS_RELEASE);
     setStringParam(ADSDKVersion, h5versionString);
 
     setStringParam(ADModel, "Scan Playback Tool");
@@ -909,68 +885,56 @@ ADScanSim::ADScanSim(const char* portName, int maxBuffers, size_t maxMemory, int
     char metadataURL[256];
 
     // Load Tiled api key from env vars.
-    if(getenv("TILED_API_KEY") != NULL)
-        this->tiledApiKey = string(getenv("TILED_API_KEY"));
+    if (getenv("TILED_API_KEY") != NULL) this->tiledApiKey = string(getenv("TILED_API_KEY"));
 
-    if(getenv("TILED_METADATA_URL") != NULL)
+    if (getenv("TILED_METADATA_URL") != NULL)
         setStringParam(ADScanSim_TiledMetadataURL, getenv("TILED_METADATA_URL"));
 
     getStringParam(ADScanSim_TiledMetadataURL, 256, metadataURL);
 
     // If all required tiled env vars are set, allow for opening data via tiled
-    if(!this->tiledApiKey.empty() && strlen(metadataURL) != 0)
-        this->tiledConfigured = true;
+    if (!this->tiledApiKey.empty() && strlen(metadataURL) != 0) this->tiledConfigured = true;
 #endif
 
-     // when epics is exited, delete the instance of this class
+    // when epics is exited, delete the instance of this class
     epicsAtExit(exitCallbackC, this);
 }
 
-
-ADScanSim::~ADScanSim(){
-    const char* functionName = "~ADScanSim";
+ADScanSim::~ADScanSim() {
+    const char *functionName = "~ADScanSim";
     LOG("Shutting down Scan Simulator...");
     closeScan();
     LOG("Done.");
 }
 
-
 //-------------------------------------------------------------
 // ADScanSim ioc shell registration
 //-------------------------------------------------------------
 
-
 /* ScanSimConfig -> These are the args passed to the constructor in the epics config function */
-static const iocshArg ScanSimConfigArg0 = { "Port name",        iocshArgString };
-static const iocshArg ScanSimConfigArg1 = { "maxBuffers",       iocshArgInt };
-static const iocshArg ScanSimConfigArg2 = { "maxMemory",        iocshArgInt };
-static const iocshArg ScanSimConfigArg3 = { "priority",         iocshArgInt };
-static const iocshArg ScanSimConfigArg4 = { "stackSize",        iocshArgInt };
-
+static const iocshArg ScanSimConfigArg0 = {"Port name", iocshArgString};
+static const iocshArg ScanSimConfigArg1 = {"maxBuffers", iocshArgInt};
+static const iocshArg ScanSimConfigArg2 = {"maxMemory", iocshArgInt};
+static const iocshArg ScanSimConfigArg3 = {"priority", iocshArgInt};
+static const iocshArg ScanSimConfigArg4 = {"stackSize", iocshArgInt};
 
 /* Array of config args */
-static const iocshArg * const ScanSimConfigArgs[] =
-        { &ScanSimConfigArg0, &ScanSimConfigArg1, &ScanSimConfigArg2,
-        &ScanSimConfigArg3, &ScanSimConfigArg4 };
-
+static const iocshArg *const ScanSimConfigArgs[] = {&ScanSimConfigArg0, &ScanSimConfigArg1,
+                                                    &ScanSimConfigArg2, &ScanSimConfigArg3,
+                                                    &ScanSimConfigArg4};
 
 /* what function to call at config */
 static void configScanSimCallFunc(const iocshArgBuf *args) {
     ADScanSimConfig(args[0].sval, args[1].ival, args[2].ival, args[3].ival, args[4].ival);
 }
 
-
 /* information about the configuration function */
-static const iocshFuncDef configScanSim = { "ADScanSimConfig", 5, ScanSimConfigArgs };
-
+static const iocshFuncDef configScanSim = {"ADScanSimConfig", 5, ScanSimConfigArgs};
 
 /* IOC register function */
-static void ScanSimRegister(void) {
-    iocshRegister(&configScanSim, configScanSimCallFunc);
-}
-
+static void ScanSimRegister(void) { iocshRegister(&configScanSim, configScanSimCallFunc); }
 
 /* external function for IOC register */
 extern "C" {
-    epicsExportRegistrar(ScanSimRegister);
+epicsExportRegistrar(ScanSimRegister);
 }
