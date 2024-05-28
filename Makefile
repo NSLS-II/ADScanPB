@@ -2,17 +2,17 @@
 TOP = .
 include $(TOP)/configure/CONFIG
 DIRS := $(DIRS) configure
-DIRS := $(DIRS) scanSimApp
+DIRS := $(DIRS) scanPBApp
 
 # To allow for playback from tiled sources, 
 ifeq ($(WITH_TILED_SUPPORT), YES)
-DIRS := $(DIRS) scanSimSupport
-scanSimApp_DEPEND_DIRS += scanSimSupport
+DIRS := $(DIRS) scanPBSupport
+scanPBApp_DEPEND_DIRS += scanPBSupport
 endif
 
 ifeq ($(BUILD_IOCS), YES)
 DIRS := $(DIRS) $(filter-out $(DIRS), $(wildcard iocs))
-iocs_DEPEND_DIRS += scanSimApp
+iocs_DEPEND_DIRS += scanPBApp
 endif
 include $(TOP)/configure/RULES_TOP
 

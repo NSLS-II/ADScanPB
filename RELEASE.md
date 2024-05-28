@@ -1,3 +1,3 @@
-# ADScanSim Releases
+# ADScanPB Releases
 
-There are currently no releases for ADScanSim
+There are currently no releases for ADScanPB

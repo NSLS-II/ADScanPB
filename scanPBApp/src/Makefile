@@ -10,19 +10,19 @@ endif
 USR_CPPFLAGS += -std=c++11
 
 ifeq ($(WITH_TILED_SUPPORT), YES)
-USR_CPPFLAGS += -DADSCANSIM_WITH_TILED_SUPPORT
+USR_CPPFLAGS += -DADSCANPB_WITH_TILED_SUPPORT
 endif
 
-INC += ADScanSim.h
+INC += ADScanPB.h
 
-LIBRARY_IOC = ADScanSim 
-LIB_SRCS += ADScanSim.cpp
+LIBRARY_IOC = ADScanPB 
+LIB_SRCS += ADScanPB.cpp
 
 ifeq ($(WITH_TILED_SUPPORT), YES)
 LIB_SYS_LIBS += cpr curl-d z
 endif
 
-DBD += scanSimSupport.dbd
+DBD += scanPBSupport.dbd
 
 include $(ADCORE)/ADApp/commonLibraryMakefile
 

@@ -10,12 +10,12 @@ include $(TOP)/configure/CONFIG
 #-------------------------------------------
 # Create and install (or just install) 
 # databases, templates, subtitutions
-DB += ADScanSim.template
-DB += ADScanSimTrig.template
-DB += ADScanSim_settings.req
+DB += ADScanPB.template
+DB += ADScanPBTrig.template
+DB += ADScanPB_settings.req
 
 ifeq ($(WITH_TILED_SUPPORT), YES)
-DB += ADScanSimTiled.template
+DB += ADScanPBTiled.template
 endif
 
 #-------------------------------------------

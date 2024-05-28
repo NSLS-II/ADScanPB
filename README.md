@@ -1,15 +1,15 @@
-# ADScanSim
+# ADScanPB
 
 AreaDetector driver that allows for re-playing scans collected with physical detectors. Allows for much simpler iteration of live and real time analysis software.
 
 ### Installation
 
-ADScanSim can be built both with or without support for reading data directly from a [`tiled`](https://github.com/bluesky/tiled) server
+ADScanPB can be built both with or without support for reading data directly from a [`tiled`](https://github.com/bluesky/tiled) server
 
 
 ### Adding a new data source
 
-ADScanSim was written in such a way that additional data sources should be relatively simple to add. Essentially, since once the data is read into memory the original source of it is no longer relevant, all that is needed to support additional data sources is to write a single new function, and add it to the list of options selectable from the `DataSource` PV.
+ADScanPB was written in such a way that additional data sources should be relatively simple to add. Essentially, since once the data is read into memory the original source of it is no longer relevant, all that is needed to support additional data sources is to write a single new function, and add it to the list of options selectable from the `DataSource` PV.
 
 Your function simply needs to guarantee a few things:
 

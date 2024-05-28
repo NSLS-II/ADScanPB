@@ -6,8 +6,8 @@
 epicsEnvSet("ENGINEER",                 "Jakub Wlodek")
 
 # IOC Information
-epicsEnvSet("PORT",                     "SCANSIM1")
-epicsEnvSet("IOC",                      "iocScanSim")
+epicsEnvSet("PORT",                     "PB1")
+epicsEnvSet("IOC",                      "iocScanPB")
 
 epicsEnvSet("EPICS_CA_AUTO_ADDR_LIST",  "NO")
 epicsEnvSet("EPICS_CA_ADDR_LIST",       "127.0.0.255")
@@ -20,7 +20,7 @@ epicsEnvSet("EPICS_CA_MAX_ARRAY_BYTES", "6000000")
 
 
 # PV and IOC Name configs
-epicsEnvSet("PREFIX",                   "DEV:SCANSIM-DET1:")
+epicsEnvSet("PREFIX",                   "DEV:SCANPB-DET1:")
 epicsEnvSet("HOSTNAME",                 "localhost")
 epicsEnvSet("IOCNAME",                  "scanSim")
 
