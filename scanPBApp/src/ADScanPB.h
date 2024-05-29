@@ -101,6 +101,11 @@ typedef enum {
     ADSCANPB_JPEG = 1,
 } ADScanPBImageFormat_t;
 
+typedef enum {
+    ADSCANPB_SIGNAL_LOW = 0,
+    ADSCANPB_SIGNAL_HIGH = 1,
+} ADScanPBTTLSignal_t;
+
 // ----------------------------------------
 // ScanPB Data Structures
 //-----------------------------------------

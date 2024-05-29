@@ -177,6 +177,12 @@ void ADScanPB::playbackThread() {
     int dataType, imageMode, colorMode, ndims, autoRepeat, nframes, arrayCallbacks, trigSignal;
     ADScanPBTrigMode_t trigMode;
     ADScanPBTrigEdge_t trigEdge;
+    ADScanPBTTLSignal_t idleSignal, busySignal;
+    getIntegerParam(ADScanPB_IdleReadySignal, (int*) &idleSignal);
+    if (idleSignal == ADSCANPB_SIGNAL_HIGH)
+        busySignal = ADSCANPB_SIGNAL_LOW;
+    else
+        busySignal = ADSCANPB_SIGNAL_HIGH;
 
     clock_t start, end;
     double playbackTime;
@@ -219,6 +225,8 @@ void ADScanPB::playbackThread() {
         int lastSignal;
         getIntegerParam(ADScanPB_TriggerSignal, &trigSignal);
         lastSignal = trigSignal;
+        setIntegerParam(ADScanPB_ReadySignal, (int) idleSignal);
+        callParamCallbacks();
 
         if (trigMode != ADSCANPB_TRIG_INTERNAL) {
             if (trigMode != ADSCANPB_TRIG_ACQ_GATE || !acqStarted) {
@@ -232,7 +240,6 @@ void ADScanPB::playbackThread() {
                 //     if(trigSignal == trigEdge) lastSignal = trigSignal;
                 // }
                 // if(!playback) break; // if we are exiting loop because of abort, break outer loop
-                this->waitingForTriggerEvent = true;
                 epicsEventWaitStatus eventRecd = epicsEventWaitError;
                 while (eventRecd != epicsEventWaitOK) {
                     if (trigEdge == ADSCANPB_EDGE_RISING)
@@ -248,6 +255,7 @@ void ADScanPB::playbackThread() {
                          trigEdge == ADSCANPB_EDGE_RISING ? "rising" : "falling");
             }
         }
+        setIntegerParam(ADScanPB_ReadySignal, (int) busySignal);
 
         double spf;
         getIntegerParam(ADScanPB_AutoRepeat, &autoRepeat);
@@ -307,15 +315,18 @@ void ADScanPB::playbackThread() {
             pArray->timeStamp = *((double *)this->scanTimestampDataBuffer + playbackPos);
         }
 
+        end = clock();
+        playbackTime = ((double)(end - start)) / CLOCKS_PER_SEC;
+
+        // Unless we are in gated exposure mode, wait for the desired exposure time.
+        if(trigMode != ADSCANPB_TRIG_EXP_GATE) {
+            epicsThreadSleep(spf - playbackTime);
+        }
+
         getIntegerParam(NDArrayCallbacks, &arrayCallbacks);
         if (arrayCallbacks) doCallbacksGenericPointer(pArray, NDArrayData, 0);
 
         pArray->release();
-
-        end = clock();
-        playbackTime = ((double)(end - start)) / CLOCKS_PER_SEC;
-
-        epicsThreadSleep(spf - playbackTime);
 
         playbackPos++;
 
@@ -440,11 +451,34 @@ asynStatus ADScanPB::writeInt32(asynUser *pasynUser, epicsInt32 value) {
     } else if (function == ADScanPB_DataSource) {
         updateImageDatasetDesc((ADScanPBDataSource_t) value);
     } else if (function == ADScanPB_TriggerSignal){
-        if (value == 1) {
-            epicsEventSignal(this->risingEdgeEventId);
-        } else {
-            epicsEventSignal(this->fallingEdgeEventId);
+        ADScanPBTrigEdge_t trigEdge;
+        getIntegerParam(ADScanPB_TriggerEdge, (int*) trigEdge);
+
+        epicsEventId edgeEvent = NULL;
+        if (value == 1 && trigEdge ==  ADSCANPB_EDGE_RISING) {
+            edgeEvent = this->risingEdgeEventId;
+        } else if (value == 0 && trigEdge == ADSCANPB_EDGE_FALLING) {
+            edgeEvent = this->fallingEdgeEventId;
         }
+        if (edgeEvent != NULL){
+            int numTriggersRecd, numTriggersDropped;
+            ADScanPBTTLSignal_t idleSignal, readySignal;
+            
+            getIntegerParam(ADScanPB_IdleReadySignal, (int*) &idleSignal);
+            getIntegerParam(ADScanPB_ReadySignal, (int*) &readySignal);
+            getIntegerParam(ADScanPB_NumTrigsRecd, &numTriggersRecd);
+            getIntegerParam(ADScanPB_NumTrigsDropped, &numTriggersDropped);
+            
+            numTriggersRecd += 1;
+            if (readySignal != idleSignal){
+                numTriggersDropped += 1;
+            } else{
+                epicsEventSignal(edgeEvent);
+            }
+            setIntegerParam(ADScanPB_NumTrigsRecd, (int)numTriggersRecd);
+            setIntegerParam(ADScanPB_NumTrigsDropped, (int)numTriggersDropped);
+        }
+        
     } else {
         if (function < ADSCANPB_FIRST_PARAM) {
             status = ADDriver::writeInt32(pasynUser, value);
