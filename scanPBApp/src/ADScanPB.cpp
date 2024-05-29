@@ -225,14 +225,25 @@ void ADScanPB::playbackThread() {
                 updateStatus("Armed, waiting for trigger.", ADSCANPB_LOG);
                 setIntegerParam(ADStatus, ADStatusWaiting);
                 callParamCallbacks();
-                // Wait for change in trigger signal, if goes from low to high, rising edge, otherwise falling edge.
-                while (!(lastSignal != trigSignal && trigSignal != (int) trigEdge)) {
+                // // Wait for change in trigger signal, if goes from low to high, rising edge, otherwise falling edge.
+                // while (!(lastSignal != trigSignal && trigSignal != (int) trigEdge)) {
+                //     if(!playback) break;
+                //     getIntegerParam(ADScanPB_TriggerSignal, &trigSignal);
+                //     if(trigSignal == trigEdge) lastSignal = trigSignal;
+                // }
+                // if(!playback) break; // if we are exiting loop because of abort, break outer loop
+                this->waitingForTriggerEvent = true;
+                epicsEventWaitStatus eventRecd = epicsEventWaitError;
+                while (eventRecd != epicsEventWaitOK) {
+                    if (trigEdge == ADSCANPB_EDGE_RISING)
+                        eventRecd = epicsEventWaitWithTimeout(this->risingEdgeEventId, TRIG_TIMEOUT);
+                    else
+                        eventRecd = epicsEventWaitWithTimeout(this->fallingEdgeEventId, TRIG_TIMEOUT);
                     if(!playback) break;
-                    getIntegerParam(ADScanPB_TriggerSignal, &trigSignal);
-                    if(trigSignal == trigEdge) lastSignal = trigSignal;
                 }
-                if(!playback) break; // if we are exiting loop because of abort, break outer loop
-                
+
+                acqStarted = true;
+                this->waitingForTriggerEvent = false;
                 LOG_ARGS("Recieved %s edge trigger.",
                          trigEdge == ADSCANPB_EDGE_RISING ? "rising" : "falling");
             }
@@ -428,6 +439,12 @@ asynStatus ADScanPB::writeInt32(asynUser *pasynUser, epicsInt32 value) {
         if (value == ADStatusIdle) printf("SAW STAT TO IDLE");
     } else if (function == ADScanPB_DataSource) {
         updateImageDatasetDesc((ADScanPBDataSource_t) value);
+    } else if (function == ADScanPB_TriggerSignal){
+        if (value == 1) {
+            epicsEventSignal(this->risingEdgeEventId);
+        } else {
+            epicsEventSignal(this->fallingEdgeEventId);
+        }
     } else {
         if (function < ADSCANPB_FIRST_PARAM) {
             status = ADDriver::writeInt32(pasynUser, value);
@@ -945,6 +962,10 @@ ADScanPB::ADScanPB(const char *portName, int maxBuffers, size_t maxMemory, int p
     getIntegerParam(ADScanPB_DataSource, &dataSource);
 
     updateImageDatasetDesc((ADScanPBDataSource_t) dataSource);
+
+    // create events for rising/falling edge triggers
+    this->risingEdgeEventId = epicsEventCreate(epicsEventEmpty);
+    this->fallingEdgeEventId = epicsEventCreate(epicsEventEmpty);
 
     // when epics is exited, delete the instance of this class
     epicsAtExit(exitCallbackC, this);

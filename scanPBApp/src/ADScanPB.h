@@ -22,6 +22,8 @@
 #define ADSCANPB_REVISION 0
 #define ADSCANPB_MODIFICATION 0
 
+#define TRIG_TIMEOUT 5
+
 typedef enum ADScanPBErr {
     ADSCANPB_LOG = 0,
     ADSCANPB_WARN = 1,
@@ -161,8 +163,9 @@ class ADScanPB : ADDriver {
 
    private:
     // Some data variables
-    epicsEventId startEventId;
-    epicsEventId endEventId;
+    epicsEventId risingEdgeEventId;
+    epicsEventId fallingEdgeEventId;
+    bool waitingForTriggerEvent = false;
 
 #ifdef ADSCANPB_WITH_TILED_SUPPORT
     string tiledApiKey;
