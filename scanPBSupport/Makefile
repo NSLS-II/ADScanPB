@@ -6,7 +6,7 @@ include $(TOP)/configure/CONFIG
 #=============================
 
 SRC_DIRS += ../cprSrc
-SRC_DIRS += ../cprSrc/cpr/include
+SRC_DIRS += ../cprSrc/include
 SRC_DIRS += ../jsonSrc
 
 # C++ request:  Curl for people
@@ -62,10 +62,10 @@ INC += json.hpp
 INC += json_fwd.hpp
 
 
-LIB_INSTALLS_Linux +=  ../cprSrc/cpr/build/lib/libcpr.so
-LIB_INSTALLS_Linux +=  ../cprSrc/cpr/build/lib/libcpr.so.1
-LIB_INSTALLS_Linux +=  ../cprSrc/cpr/build/lib/libcurl-d.so
-LIB_INSTALLS_Linux +=  ../cprSrc/cpr/build/lib/libz.so
+LIB_INSTALLS_Linux +=  ../cprSrc/build/lib/libcpr.so
+LIB_INSTALLS_Linux +=  ../cprSrc/build/lib/libcpr.so.1
+LIB_INSTALLS_Linux +=  ../cprSrc/build/lib/libcurl-d.so
+LIB_INSTALLS_Linux +=  ../cprSrc/build/lib/libz.so
 
 #=============================
 

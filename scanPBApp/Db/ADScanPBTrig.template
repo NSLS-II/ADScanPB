@@ -70,39 +70,28 @@ record(bi, "$(P)$(R)ReadySignal_RBV")
 {
     field(DTYP, "asynInt32")
     field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))READY_SIGNAL")
+    field(VAL, "0")
     field(ZNAM, "Low")
     field(ONAM, "High")
     field(SCAN, "I/O Intr")
 }
 
-
-record(calcout, "$(P)$(R)TriggerSignal_RBV")
-{
+record(bo, "$(P)$(R)TriggerSignal"){
+    field(DESC, "$(TRIGGER_SIGNAL)")
     field(DTYP, "asynInt32")
-    field(INPA, "$(TRIGGER_SIGNAL) CA")
-    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))TRIG_SIGNAL")
-    field(SCAN, "I/O Intr")
+    field(OUT,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))TRIG_SIGNAL")
+    field(VAL, "0")
+    field(ZNAM, "Low")
+    field(ONAM, "High")
 }
 
-record(scalcout, "$(P)$(R)TriggerSignalInputStr")
-{
-    field(DTYP, "Soft Channel")
-    field(INPA, "$(P)$(R)TriggerSource.VAL")
-    field(CALC, "PRINTF('%s CA PP', A)")
-    field(OOPT, "Every Time")
-    field(OUT, "$(P)$(R)TriggerSignal_RBV.INP")
-    field(DOPT, "Use CALC")
-    field(SCAN, "I/O Intr")
-}
 
-record(waveform, "$(P)$(R)TriggerSource")
-{
+record(calcout, "$(P)$(R)TriggerSignalCalc") {
     field(DTYP, "Soft Channel")
-    #field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))TRIG_SOURCE")
-    field(FLNK, "$(P)$(R)TriggerSignalInputStr")
-    field(FTVL, "CHAR")
-    field(NELM, "256")
-    field(PINI, "YES")
+    field(INPA, "$(TRIGGER_SIGNAL) CP NMS")
+    field(CALC, "A")
+    field(OUT, "$(P)$(R)TriggerSignal PP")
+    #field(OOPT, "Transition To Zero")
 }
 
 record(ai, "$(P)$(R)NumTrigsRecd_RBV"){

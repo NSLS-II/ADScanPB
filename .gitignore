@@ -12,3 +12,5 @@ bin/
 envPaths
 autosave/
 cpr/
+autostart.sh
+cprSrc/

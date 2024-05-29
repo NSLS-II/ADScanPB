@@ -191,7 +191,7 @@ void ADScanPB::playbackThread() {
     getIntegerParam(ADScanPB_NumFrames, &nframes);
 
     getIntegerParam(ADTriggerMode, (int *)&trigMode);
-    getIntegerParam(ADScanPB_ExtTriggerEdge, (int *)&trigEdge);
+    getIntegerParam(ADScanPB_TriggerEdge, (int *)&trigEdge);
 
     int width, height;
     getIntegerParam(ADMaxSizeX, &width);
@@ -212,21 +212,30 @@ void ADScanPB::playbackThread() {
         dims[2] = height;
     }
 
+    bool acqStarted = false;
+
     while (playback) {
         start = clock();
         int lastSignal;
-        getIntegerParam(ADScanPB_ExtTriggerSignal, &trigSignal);
+        getIntegerParam(ADScanPB_TriggerSignal, &trigSignal);
         lastSignal = trigSignal;
 
         if (trigMode != ADSCANPB_TRIG_INTERNAL) {
-            LOG("Waiting for trigger");
-
-            while (!(lastSignal != trigSignal && trigSignal == (int)trigEdge)) {
-                getIntegerParam(ADScanPB_ExtTriggerSignal, &trigSignal);
-                if (lastSignal != trigSignal) lastSignal = trigSignal;
+            if (trigMode != ADSCANPB_TRIG_ACQ_GATE || !acqStarted) {
+                updateStatus("Armed, waiting for trigger.", ADSCANPB_LOG);
+                setIntegerParam(ADStatus, ADStatusWaiting);
+                callParamCallbacks();
+                // Wait for change in trigger signal, if goes from low to high, rising edge, otherwise falling edge.
+                while (!(lastSignal != trigSignal && trigSignal != (int) trigEdge)) {
+                    if(!playback) break;
+                    getIntegerParam(ADScanPB_TriggerSignal, &trigSignal);
+                    if(trigSignal == trigEdge) lastSignal = trigSignal;
+                }
+                if(!playback) break; // if we are exiting loop because of abort, break outer loop
+                
+                LOG_ARGS("Recieved %s edge trigger.",
+                         trigEdge == ADSCANPB_EDGE_RISING ? "rising" : "falling");
             }
-            LOG_ARGS("Recieved %s edge trigger.",
-                     trigEdge == ADSCANPB_EDGE_RISING ? "rising" : "falling");
         }
 
         double spf;

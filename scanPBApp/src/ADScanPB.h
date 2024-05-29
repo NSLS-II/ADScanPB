@@ -37,9 +37,8 @@ typedef enum ADScanPBErr {
 #define ADScanPB_TiledMetadataURLString "TILED_METADATA_URL"
 #endif
 
-#define ADScanPB_ExtTriggerEdgeString "TRIG_EDGE"
-#define ADScanPB_ExtTriggerSourceString "TRIG_SOURCE"
-#define ADScanPB_ExtTriggerSignalString "TRIG_SIGNAL"
+#define ADScanPB_TriggerEdgeString "TRIG_EDGE"
+#define ADScanPB_TriggerSignalString "TRIG_SIGNAL"
 #define ADScanPB_DataSourceString "DATA_SOURCE"
 #define ADScanPB_ImageDatasetString "IMAGE_DATASET"  //
 #define ADScanPB_ImageDatasetDescString "IMAGE_DATASET_DESC"  //
@@ -84,7 +83,7 @@ typedef enum {
     ADSCANPB_TRIG_ACQ_GATE = 3, // Acquire with internal clock during gate
 } ADScanPBTrigMode_t;
 
-typedef enum { ADSCANPB_EDGE_RISING = 1, ADSCANPB_EDGE_FALLING = 0 } ADScanPBTrigEdge_t;
+typedef enum { ADSCANPB_EDGE_RISING = 0, ADSCANPB_EDGE_FALLING = 1 } ADScanPBTrigEdge_t;
 
 typedef enum {
     ADSCANPB_DS_HDF5 = 1,
@@ -140,9 +139,8 @@ class ADScanPB : ADDriver {
     int ADScanPB_TiledMetadataURL;
 #endif
 
-    int ADScanPB_ExtTriggerSource;
-    int ADScanPB_ExtTriggerSignal;
-    int ADScanPB_ExtTriggerEdge;
+    int ADScanPB_TriggerSignal;
+    int ADScanPB_TriggerEdge;
     int ADScanPB_DataSource;
     int ADScanPB_ImageDataset;
     int ADScanPB_ImageDatasetDesc;
@@ -155,10 +153,8 @@ class ADScanPB : ADDriver {
     int ADScanPB_SupportedSources;
     int ADScanPB_NumFramesLoaded;
     int ADScanPB_LoadPercent;
-    int ADScanPB_TriggerEdge;
     int ADScanPB_IdleReadySignal;
     int ADScanPB_ReadySignal;
-    int ADScanPB_TriggerSignal;
     int ADScanPB_NumTrigsRecd;
     int ADScanPB_NumTrigsDropped;
 #define ADSCANPB_LAST_PARAM ADScanPB_NumTrigsDropped

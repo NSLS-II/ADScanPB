@@ -74,7 +74,5 @@ iocInit()
 create_monitor_set("auto_settings.req", 30, "P=$(PREFIX)")
 
 # Load scan at startup
-#dbpf DEV:SCANPB-DET1:cam1:ImageDataset "/img_tomo"
-#dbpf DEV:SCANPB-DET1:cam1:DataSource 1
-#dbpf DEV:SCANPB-DET1:cam1:ScanFilePath "/data/fly_scan_id_6774.h5"
-#dbpf DEV:SCANPB-DET1:cam1:ScanFilePath "https://tiled-demo.blueskyproject.io/api/v1/node/metadata/fxi/raw/1b0b4d73-6d87-43ab-8d62-ed035c51b9b4/primary/data/Andor_image"
+dbpf $(PREFIX)cam1:ImageDataset "/entry/data/data"
+dbpf $(PREFIX)cam1:ScanPath "/nsls2/data/tst/legacy/mock-proposals/2024-1/pass-000000/01bf70d7-fec9-4336-9c9e-a971cb1cf286_000.h5"
