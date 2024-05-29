@@ -455,9 +455,9 @@ asynStatus ADScanPB::writeInt32(asynUser *pasynUser, epicsInt32 value) {
         getIntegerParam(ADScanPB_TriggerEdge, (int*) trigEdge);
 
         epicsEventId edgeEvent = NULL;
-        if (value == 1 && trigEdge ==  ADSCANPB_EDGE_RISING) {
+        if (value == 1) {
             edgeEvent = this->risingEdgeEventId;
-        } else if (value == 0 && trigEdge == ADSCANPB_EDGE_FALLING) {
+        } else if (value == 0) {
             edgeEvent = this->fallingEdgeEventId;
         }
         if (edgeEvent != NULL){
