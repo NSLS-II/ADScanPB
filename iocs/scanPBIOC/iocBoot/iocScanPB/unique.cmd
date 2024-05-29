@@ -20,7 +20,7 @@ epicsEnvSet("EPICS_CA_MAX_ARRAY_BYTES", "6000000")
 
 
 # PV and IOC Name configs
-epicsEnvSet("PREFIX",                   "DEV:SCANPB-DET1:")
+epicsEnvSet("PREFIX",                   "DEV:SCANPB:DET1:")
 epicsEnvSet("HOSTNAME",                 "localhost")
 epicsEnvSet("IOCNAME",                  "scanSim")
 

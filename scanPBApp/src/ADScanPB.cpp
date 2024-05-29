@@ -84,10 +84,6 @@ const char *driverName = "ADScanPB";
  * Envokes the constructor to create a new ADScanPB object
  * This is the function that initializes the driver, and is called in the IOC startup script
  *
- * NOTE: When implementing a new driver with ADDriverTemplate, your camera may use a different
- * connection method than a const char* connectionParam. Just edit the param to fit your device, and
- * make sure to make the same edit to the constructor below
- *
  * @params[in]: all passed into constructor
  * @return:     status
  */
@@ -101,7 +97,7 @@ extern "C" int ADScanPBConfig(const char *portName, int maxBuffers, size_t maxMe
  * Callback function called when IOC is terminated.
  * Deletes created object
  *
- * @params[in]: pPvt -> pointer to the ADDRIVERNAMESTANDATD object created in ADScanPBConfig
+ * @params[in]: pPvt -> pointer to the ADScanPB object created in ADScanPBConfig
  * @return:     void
  */
 static void exitCallbackC(void *pPvt) {
@@ -421,6 +417,8 @@ asynStatus ADScanPB::writeInt32(asynUser *pasynUser, epicsInt32 value) {
         status = asynError;
     } else if (function == ADStatus) {
         if (value == ADStatusIdle) printf("SAW STAT TO IDLE");
+    } else if (function == ADScanPB_DataSource) {
+        updateImageDatasetDesc((ADScanPBDataSource_t) value);
     } else {
         if (function < ADSCANPB_FIRST_PARAM) {
             status = ADDriver::writeInt32(pasynUser, value);
@@ -497,6 +495,8 @@ void ADScanPB::closeScan() {
     if (this->scanTimestampDataBuffer != NULL) free(this->scanTimestampDataBuffer);
 
     setIntegerParam(ADScanPB_ScanLoaded, 0);
+    setDoubleParam(ADScanPB_LoadPercent, 0);
+    setIntegerParam(ADScanPB_NumFramesLoaded, 0);
     callParamCallbacks();
 }
 
@@ -506,7 +506,7 @@ asynStatus ADScanPB::openScanTiled(const char *nodePath) {
     asynStatus status = asynSuccess;
 
     char metadataURL[256];
-    getStringParam(ADScanPB_TiledMetadataURL, 256, metadataURL);
+    getStringParam(ADScanPB_ImageDataset, 256, metadataURL);
     printf("%s\n", metadataURL);
 
     if (!this->tiledApiKey.empty() && strlen(metadataURL) != 0) this->tiledConfigured = true;
@@ -578,6 +578,8 @@ asynStatus ADScanPB::openScanTiled(const char *nodePath) {
     // allocate buffer for image data & read entire scan into it.
     this->scanImageDataBuffer = calloc(numElems, bytesPerElem);
 
+    int framesLoaded = 0;
+
     int firstChunkListLen = chunks[0].size();
     int secondChunkListLen = chunks[1].size();
     size_t bufferWriteOffset = 0;
@@ -626,6 +628,10 @@ asynStatus ADScanPB::openScanTiled(const char *nodePath) {
 
             memcpy((void *)((uint8_t *)this->scanImageDataBuffer + bufferWriteOffset),
                    (void *)data.text.c_str(), numBytesToCopy);
+            framesLoaded = framesLoaded + (numAcquisitionsPerChunk * numFramesPerChunk);
+            setIntegerParam(ADScanPB_NumFramesLoaded, framesLoaded);
+            setDoubleParam(ADScanPB_LoadPercent, 100 * (framesLoaded / numFrames));
+            callParamCallbacks();
             bufferWriteOffset += numBytesToCopy;
         }
     }
@@ -756,9 +762,25 @@ asynStatus ADScanPB::openScanHDF5(const char *filePath) {
     H5Dclose(imageDatasetId);
     H5Fclose(fileId);
     updateStatus("Done", ADSCANPB_LOG);
+    // H5Dread does not offer any progress indicators.
+    setIntegerParam(ADScanPB_NumFramesLoaded, numFrames);
+    setDoubleParam(ADScanPB_LoadPercent, 100);
     setIntegerParam(ADScanPB_ScanLoaded, 1);
     callParamCallbacks();
     return status;
+}
+
+
+void ADScanPB::updateImageDatasetDesc(ADScanPBDataSource_t dataSource){
+    const char* functionName = "updateImageDatasetDesc";
+    char imgDatasetDesc[256];
+    if (dataSource == ADSCANPB_DS_HDF5) sprintf(imgDatasetDesc, "Internal path to image dataset");
+    else if (dataSource == ADSCANPB_DS_TIFF) sprintf(imgDatasetDesc, "Match pattern of tiff filenames");
+    else if (dataSource == ADSCANPB_DS_JPEG) sprintf(imgDatasetDesc, "Match pattern of jpeg filenames");
+    else if (dataSource == ADSCANPB_DS_MP4) sprintf(imgDatasetDesc, "N/A");
+    else if (dataSource == ADSCANPB_DS_TILED) sprintf(imgDatasetDesc, "Tiled Metadata URL");
+    else if (dataSource == ADSCANPB_DS_KAFKA) sprintf(imgDatasetDesc, "Kafka Topic");
+    setStringParam(ADScanPB_ImageDatasetDesc, imgDatasetDesc);
 }
 
 asynStatus ADScanPB::writeOctet(asynUser *pasynUser, const char *value, size_t nChars,
@@ -783,7 +805,7 @@ asynStatus ADScanPB::writeOctet(asynUser *pasynUser, const char *value, size_t n
 
             int dataSource;
             getIntegerParam(ADScanPB_DataSource, &dataSource);
-            if (dataSource == 0) status = this->openScanHDF5(value);
+            if (dataSource == ADSCANPB_DS_HDF5) status = this->openScanHDF5(value);
 #ifdef ADSCANPB_WITH_TILED_SUPPORT
             else if (dataSource == 1)
                 status = this->openScanTiled(value);
@@ -842,10 +864,7 @@ ADScanPB::ADScanPB(const char *portName, int maxBuffers, size_t maxMemory, int p
                asynEnumMask, ASYN_CANBLOCK, 1, priority, stackSize) {
     static const char *functionName = "ADScanPB";
 
-    // Call createParam here for all of your
-    // ex. createParam(ADUVC_UVCComplianceLevelString, asynParamInt32, &ADUVC_UVCComplianceLevel);
-
-    LOG("Intializing Scan Simulator...");
+    LOG("Intializing scan playback tool...");
 
     /* Turn off HDF5 error handling */
     H5Eset_auto(H5E_DEFAULT, NULL, NULL);
@@ -858,12 +877,24 @@ ADScanPB::ADScanPB(const char *portName, int maxBuffers, size_t maxMemory, int p
 #endif
     createParam(ADScanPB_DataSourceString, asynParamInt32, &ADScanPB_DataSource);
     createParam(ADScanPB_ImageDatasetString, asynParamOctet, &ADScanPB_ImageDataset);
+    createParam(ADScanPB_ImageDatasetDescString, asynParamOctet, &ADScanPB_ImageDatasetDesc);
     createParam(ADScanPB_TSDatasetString, asynParamOctet, &ADScanPB_TSDataset);
     createParam(ADScanPB_AutoRepeatString, asynParamInt32, &ADScanPB_AutoRepeat);
     createParam(ADScanPB_ScanLoadedString, asynParamInt32, &ADScanPB_ScanLoaded);
     createParam(ADScanPB_PlaybackPosString, asynParamInt32, &ADScanPB_PlaybackPos);
     createParam(ADScanPB_ResetPlaybackPosString, asynParamInt32, &ADScanPB_ResetPlaybackPos);
     createParam(ADScanPB_NumFramesString, asynParamInt32, &ADScanPB_NumFrames);
+    createParam(ADScanPB_SupportedSourcesString, asynParamInt32, &ADScanPB_SupportedSources);
+    createParam(ADScanPB_NumFramesLoadedString, asynParamInt32, &ADScanPB_NumFramesLoaded);
+    createParam(ADScanPB_LoadPercentString, asynParamFloat64, &ADScanPB_LoadPercent);
+    createParam(ADScanPB_TriggerEdgeString, asynParamInt32, &ADScanPB_TriggerEdge);
+    createParam(ADScanPB_IdleReadySignalString, asynParamInt32, &ADScanPB_IdleReadySignal);
+    createParam(ADScanPB_ReadySignalString, asynParamInt32, &ADScanPB_ReadySignal);
+    createParam(ADScanPB_TriggerSignalString, asynParamInt32, &ADScanPB_TriggerSignal);
+    createParam(ADScanPB_NumTrigsRecdString, asynParamInt32, &ADScanPB_NumTrigsRecd);
+    createParam(ADScanPB_NumTrigsDroppedString, asynParamInt32, &ADScanPB_NumTrigsDropped);
+
+    int supportedDataSources = ADSCANPB_DS_HDF5; // Set Supported data sources to default builtins (HDF5)
 
     // Sets driver version PV (version numbers defined in header file)
     char versionString[25];
@@ -877,18 +908,21 @@ ADScanPB::ADScanPB(const char *portName, int maxBuffers, size_t maxMemory, int p
     setStringParam(ADSDKVersion, h5versionString);
 
     setStringParam(ADModel, "Scan Playback Tool");
-    setStringParam(ADManufacturer, "BNL - NSLS2");
+    setStringParam(ADManufacturer, "NSLS2");
     setStringParam(ADFirmwareVersion, "N/A");
     setStringParam(ADSerialNumber, "N/A");
 
 #ifdef ADSCANPB_WITH_TILED_SUPPORT
+
+    supportedDataSources = supportedDataSources & ADSCANPB_DS_TILED;
+
     char metadataURL[256];
 
     // Load Tiled api key from env vars.
     if (getenv("TILED_API_KEY") != NULL) this->tiledApiKey = string(getenv("TILED_API_KEY"));
 
     if (getenv("TILED_METADATA_URL") != NULL)
-        setStringParam(ADScanPB_TiledMetadataURL, getenv("TILED_METADATA_URL"));
+        setStringParam(ADScanPB_ImageDataset, getenv("TILED_METADATA_URL"));
 
     getStringParam(ADScanPB_TiledMetadataURL, 256, metadataURL);
 
@@ -896,13 +930,20 @@ ADScanPB::ADScanPB(const char *portName, int maxBuffers, size_t maxMemory, int p
     if (!this->tiledApiKey.empty() && strlen(metadataURL) != 0) this->tiledConfigured = true;
 #endif
 
+    setIntegerParam(ADScanPB_SupportedSources, supportedDataSources);
+
+    int dataSource;
+    getIntegerParam(ADScanPB_DataSource, &dataSource);
+
+    updateImageDatasetDesc((ADScanPBDataSource_t) dataSource);
+
     // when epics is exited, delete the instance of this class
     epicsAtExit(exitCallbackC, this);
 }
 
 ADScanPB::~ADScanPB() {
     const char *functionName = "~ADScanPB";
-    LOG("Shutting down Scan Simulator...");
+    LOG("Shutting down scan playback tool...");
     closeScan();
     LOG("Done.");
 }

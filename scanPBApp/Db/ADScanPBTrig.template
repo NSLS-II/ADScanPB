@@ -1,4 +1,28 @@
 
+record(mbbo,"$(P)$(R)TriggerMode") {
+    field(DESC,"Acquire mode")
+    field(ZRVL,"0")
+    field(ZRST,"Internal")
+    field(ONVL,"1")
+    field(ONST,"Edge")
+    field(TWVL,"2")
+    field(TWST,"Exp. Gate")
+    field(THVL, "3")
+    field(THST,"Acq. Gate")
+}
+
+record(mbbi,"$(P)$(R)TriggerMode_RBV") {
+    field(DESC,"Acquire mode")
+    field(ZRVL,"0")
+    field(ZRST,"Internal")
+    field(ONVL,"1")
+    field(ONST,"Exp. Edge")
+    field(TWVL,"2")
+    field(TWST,"Exp. Gate")
+    field(THVL, "3")
+    field(THST,"Acq. Gate")
+}
+
 
 record(bo, "$(P)$(R)TriggerEdge")
 {
@@ -21,13 +45,42 @@ record(bi, "$(P)$(R)TriggerEdge_RBV")
 }
 
 
+record(bo, "$(P)$(R)IdleReadySignal")
+{
+    field(PINI, "YES")
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))IDLE_READY_SIG")
+    field(VAL,  "1")
+    field(ZNAM, "Low")
+    field(ONAM, "High")
+    info(autosaveFields, "VAL")
+}
+
+record(bi, "$(P)$(R)IdleReadySignal_RBV")
+{
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))IDLE_READY_SIG")
+    field(ZNAM, "Low")
+    field(ONAM, "High")
+    field(SCAN, "I/O Intr")
+}
+
+
+record(bi, "$(P)$(R)ReadySignal_RBV")
+{
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))READY_SIGNAL")
+    field(ZNAM, "Low")
+    field(ONAM, "High")
+    field(SCAN, "I/O Intr")
+}
+
+
 record(calcout, "$(P)$(R)TriggerSignal_RBV")
 {
     field(DTYP, "asynInt32")
     field(INPA, "$(TRIGGER_SIGNAL) CA")
     field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))TRIG_SIGNAL")
-    field(ZNAM, "Low")
-    field(ONAM, "High")
     field(SCAN, "I/O Intr")
 }
 
@@ -44,10 +97,24 @@ record(scalcout, "$(P)$(R)TriggerSignalInputStr")
 
 record(waveform, "$(P)$(R)TriggerSource")
 {
-    field(DTYP, "asynOctetWrite")
-    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))TRIG_SOURCE")
+    field(DTYP, "Soft Channel")
+    #field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))TRIG_SOURCE")
     field(FLNK, "$(P)$(R)TriggerSignalInputStr")
     field(FTVL, "CHAR")
     field(NELM, "256")
     field(PINI, "YES")
+}
+
+record(ai, "$(P)$(R)NumTrigsRecd_RBV"){
+    field(DTYP, "asynInt32")
+    field(VAL, "0")
+    field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))TRIGS_RECD")
+    field(SCAN, "I/O Intr")
+}
+
+record(ai, "$(P)$(R)NumTrigsDropped_RBV"){
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))TRIGS_DROPPED")
+    field(VAL, "0")
+    field(SCAN, "I/O Intr")
 }

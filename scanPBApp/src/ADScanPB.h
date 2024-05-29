@@ -42,12 +42,26 @@ typedef enum ADScanPBErr {
 #define ADScanPB_ExtTriggerSignalString "TRIG_SIGNAL"
 #define ADScanPB_DataSourceString "DATA_SOURCE"
 #define ADScanPB_ImageDatasetString "IMAGE_DATASET"  //
+#define ADScanPB_ImageDatasetDescString "IMAGE_DATASET_DESC"  //
 #define ADScanPB_TSDatasetString "TS_DATASET"        //
 #define ADScanPB_AutoRepeatString "AUTO_REPEAT"      //
 #define ADScanPB_ScanLoadedString "SCAN_LOADED"      //
 #define ADScanPB_PlaybackPosString "PLAYBACK_POS"
 #define ADScanPB_ResetPlaybackPosString "RESET_PLAYBACK_POS"
 #define ADScanPB_NumFramesString "NUM_FRAMES"  //
+#define ADScanPB_SupportedSourcesString "SUPPORTED_SOURCES"
+#define ADScanPB_NumFramesLoadedString "NUM_FRAMES_LOADED"
+#define ADScanPB_LoadPercentString "PERCENT_LOADED"
+
+// Triggering records
+#define ADScanPB_TriggerEdgeString "TRIG_EDGE"
+#define ADScanPB_IdleReadySignalString "IDLE_READY_SIG"
+#define ADScanPB_ReadySignalString "READY_SIGNAL"
+#define ADScanPB_TriggerSignalString "TRIG_SIGNAL"
+#define ADScanPB_NumTrigsRecdString "TRIGS_RECD"
+#define ADScanPB_NumTrigsDroppedString "TRIGS_DROPPED"
+
+
 
 // Place any required inclues here
 
@@ -64,12 +78,27 @@ using json = nlohmann::json;
 #endif
 
 typedef enum {
-    ADSCANPB_TRIG_INTERNAL = 0,
-    ADSCANPB_TRIG_EDGE = 1,
-    ADSCANPB_TRIG_GATE = 2,
+    ADSCANPB_TRIG_INTERNAL = 0, // Purely software trigger
+    ADSCANPB_TRIG_EDGE = 1, // Edge trigger, software exposure
+    ADSCANPB_TRIG_EXP_GATE = 2, // Expose for trigger gate
+    ADSCANPB_TRIG_ACQ_GATE = 3, // Acquire with internal clock during gate
 } ADScanPBTrigMode_t;
 
 typedef enum { ADSCANPB_EDGE_RISING = 1, ADSCANPB_EDGE_FALLING = 0 } ADScanPBTrigEdge_t;
+
+typedef enum {
+    ADSCANPB_DS_HDF5 = 1,
+    ADSCANPB_DS_TIFF = 2,
+    ADSCANPB_DS_JPEG = 4,
+    ADSCANPB_DS_MP4 = 8,
+    ADSCANPB_DS_TILED = 16,
+    ADSCANPB_DS_KAFKA = 32,
+} ADScanPBDataSource_t;
+
+typedef enum {
+    ADSCANPB_TIFF = 0,
+    ADSCANPB_JPEG = 1,
+} ADScanPBImageFormat_t;
 
 // ----------------------------------------
 // ScanPB Data Structures
@@ -116,13 +145,23 @@ class ADScanPB : ADDriver {
     int ADScanPB_ExtTriggerEdge;
     int ADScanPB_DataSource;
     int ADScanPB_ImageDataset;
+    int ADScanPB_ImageDatasetDesc;
     int ADScanPB_TSDataset;
     int ADScanPB_AutoRepeat;
     int ADScanPB_ScanLoaded;
     int ADScanPB_PlaybackPos;
     int ADScanPB_ResetPlaybackPos;
     int ADScanPB_NumFrames;
-#define ADSCANPB_LAST_PARAM ADScanPB_NumFrames
+    int ADScanPB_SupportedSources;
+    int ADScanPB_NumFramesLoaded;
+    int ADScanPB_LoadPercent;
+    int ADScanPB_TriggerEdge;
+    int ADScanPB_IdleReadySignal;
+    int ADScanPB_ReadySignal;
+    int ADScanPB_TriggerSignal;
+    int ADScanPB_NumTrigsRecd;
+    int ADScanPB_NumTrigsDropped;
+#define ADSCANPB_LAST_PARAM ADScanPB_NumTrigsDropped
 
    private:
     // Some data variables
@@ -151,11 +190,15 @@ class ADScanPB : ADDriver {
     // writes to ADStatus PV
     void updateStatus(const char *status, ADScanPBErr_t errLevel);
 
+    void updateImageDatasetDesc(ADScanPBDataSource_t dataSource);
+
     // ----------------------------------------
-    // ScanPB Functions - Simulator functions
+    // ScanPB Functions - Scan Load Functions
     //-----------------------------------------
 
     asynStatus openScanHDF5(const char *filePath);
+    // asynStatus openScanImageSeries(const char *filePath, ADScanPBImageFormat_t format);
+    // asynStatus openScanMP4(const char *filePath);
 
 #ifdef ADSCANPB_WITH_TILED_SUPPORT
     asynStatus openScanTiled(const char *nodePath);

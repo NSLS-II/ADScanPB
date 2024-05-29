@@ -47,7 +47,7 @@ record(ai, "$(P)$(R)PlaybackRateSPF_RBV"){
     field(SCAN, "I/O Intr")
 }
 
-record(waveform, "$(P)$(R)ScanFilePath")
+record(waveform, "$(P)$(R)ScanPath")
 {
     field(PINI, "YES")
     field(DTYP, "asynOctetWrite")
@@ -67,23 +67,43 @@ record(waveform, "$(P)$(R)ScanFilePath_RBV")
 }
 
 
-record(bo, "$(P)$(R)DataSource")
+record(mbbo, "$(P)$(R)DataSource")
 {
     field(PINI, "YES")
     field(DTYP, "asynInt32")
     field(OUT,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))DATA_SOURCE")
     field(VAL,  "0")
-    field(ZNAM, "HDF5 File")
-    field(ONAM, "Tiled")
+    field(ZRST, "HDF5")
+    field(ZRVL, "1")
+    field(ONST, "TIFF")
+    field(ONVL, "2")
+    field(TWST, "JPEG")
+    field(TWVL, "4")
+    field(THST, "MP4")
+    field(THVL, "8")
+    field(FRST, "Tiled")
+    field(FRVL, "16")
+    field(FVST, "Kafka")
+    field(FVVL, "32")
     info(autosaveFields, "VAL")
 }
 
-record(bi, "$(P)$(R)DataSource_RBV")
+record(mbbi, "$(P)$(R)DataSource_RBV")
 {
     field(DTYP, "asynInt32")
     field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))DATA_SOURCE")
-    field(ZNAM, "HDF5 File")
-    field(ONAM, "Tiled")
+    field(ZRST, "HDF5")
+    field(ZRVL, "1")
+    field(ONST, "TIFF")
+    field(ONVL, "2")
+    field(TWST, "JPEG")
+    field(TWVL, "4")
+    field(THST, "MP4")
+    field(THVL, "8")
+    field(FRST, "Tiled")
+    field(FRVL, "16")
+    field(FVST, "Kafka")
+    field(FVVL, "32")
     field(SCAN, "I/O Intr")
 }
 
@@ -102,9 +122,35 @@ record(waveform, "$(P)$(R)ImageDataset")
 record(waveform, "$(P)$(R)ImageDataset_RBV")
 {
     field(DTYP, "asynOctetRead")
-    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))SCAN_FILE_PATH")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))IMAGE_DATASET")
     field(FTVL, "CHAR")
     field(NELM, "256")
+    field(SCAN, "I/O Intr")
+}
+
+record(waveform, "$(P)$(R)ImageDatasetDesc_RBV")
+{
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))IMAGE_DATASET_DESC")
+    field(FTVL, "CHAR")
+    field(NELM, "256")
+    field(SCAN, "I/O Intr")
+}
+
+
+record(ai, "$(P)$(R)NumFramesLoaded_RBV"){
+    field(DTYP, "asynInt32")
+    field(VAL, "0")
+    field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))NUM_FRAMES_LOADED")
+    field(SCAN, "I/O Intr")
+}
+
+
+record(ai, "$(P)$(R)LoadPercent_RBV"){
+    field(DTYP, "asynFloat64")
+    field(VAL, "0")
+    field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PERCENT_LOADED")
+    field(EGU, "%")
     field(SCAN, "I/O Intr")
 }
 
@@ -160,6 +206,7 @@ record(bi, "$(P)$(R)ScanLoaded_RBV")
 
 record(ai, "$(P)$(R)NumFrames_RBV"){
     field(DTYP, "asynInt32")
+    field(VAL, "0")
     field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))NUM_FRAMES")
     field(SCAN, "I/O Intr")
 }
@@ -184,4 +231,10 @@ record(bo, "$(P)$(R)ResetPlaybackPosition")
     field(DTYP, "asynInt32")
     field(OUT,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))RESET_PLAYBACK_POS")
     field(VAL,  "0")
+}
+
+record(ai, "$(P)$(R)SupportedSources_RBV"){
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))SUPPORTED_SOURCES")
+    field(SCAN, "I/O Intr")
 }

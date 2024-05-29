@@ -45,7 +45,7 @@ asynSetTraceIOMask($(PORT), 0, 2)
 
 dbLoadRecords("$(ADCORE)/db/ADBase.template", "P=$(PREFIX),R=cam1:,PORT=$(PORT),ADDR=0,TIMEOUT=1")
 dbLoadRecords("$(ADSCANPB)/db/ADScanPB.template","P=$(PREFIX),R=cam1:,PORT=$(PORT),ADDR=0,TIMEOUT=1")
-dbLoadRecords("$(ADSCANPB)/db/ADScanPBTrig.template","P=$(PREFIX),R=cam1:,TRIGGER_SIGNAL=XFPORT=$(PORT),ADDR=0,TIMEOUT=1")
+dbLoadRecords("$(ADSCANPB)/db/ADScanPBTrig.template","P=$(PREFIX),R=cam1:,TRIGGER_SIGNAL=$(TRIGGER_SIGNAL),PORT=$(PORT),ADDR=0,TIMEOUT=1")
 
 # Optionally, if tiled support is included
 #dbLoadRecords("$(ADSCANPB)/db/ADScanPBTiled.template", "P=$(PREFIX),R=cam1:,PORT=$(PORT),ADDR=0,TIMEOUT=1, TILED_METADATA_URL=$(TILED_METADATA_URL), TILED_ARRAY_URL=$(TILED_ARRAY_URL)")
