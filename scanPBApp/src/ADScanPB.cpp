@@ -452,7 +452,7 @@ asynStatus ADScanPB::writeInt32(asynUser *pasynUser, epicsInt32 value) {
         updateImageDatasetDesc((ADScanPBDataSource_t) value);
     } else if (function == ADScanPB_TriggerSignal){
         ADScanPBTrigEdge_t trigEdge;
-        getIntegerParam(ADScanPB_TriggerEdge, (int*) trigEdge);
+        getIntegerParam(ADScanPB_TriggerEdge, (int*) &trigEdge);
 
         epicsEventId edgeEvent = NULL;
         if (value == 1) {
