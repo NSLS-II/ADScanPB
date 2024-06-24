@@ -259,7 +259,7 @@ void ADScanPB::playbackThread() {
 
         double spf;
         getIntegerParam(ADScanPB_AutoRepeat, &autoRepeat);
-        getDoubleParam(ADScanPB_PlaybackRateSPF, &spf);
+        getDoubleParam(ADAcquirePeriod, &spf);
         getIntegerParam(ADScanPB_PlaybackPos, &playbackPos);
         LOG_ARGS("Playing back frame %d from scan...", playbackPos);
 
