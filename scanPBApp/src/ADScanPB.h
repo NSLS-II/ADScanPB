@@ -89,11 +89,11 @@ typedef enum { ADSCANPB_EDGE_RISING = 0, ADSCANPB_EDGE_FALLING = 1 } ADScanPBTri
 
 typedef enum {
     ADSCANPB_DS_HDF5 = 1,
-    ADSCANPB_DS_TIFF = 2,
-    ADSCANPB_DS_JPEG = 4,
-    ADSCANPB_DS_MP4 = 8,
-    ADSCANPB_DS_TILED = 16,
-    ADSCANPB_DS_KAFKA = 32,
+    ADSCANPB_DS_HDF5_STACK = 2,
+    ADSCANPB_DS_TIFF = 4,
+    ADSCANPB_DS_JPEG = 8,
+    ADSCANPB_DS_MP4 = 16,
+    ADSCANPB_DS_TILED = 32,
 } ADScanPBDataSource_t;
 
 typedef enum {

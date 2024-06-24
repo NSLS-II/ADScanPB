@@ -446,8 +446,6 @@ asynStatus ADScanPB::writeInt32(asynUser *pasynUser, epicsInt32 value) {
     } else if (function == NDDataType || function == NDColorMode) {
         updateStatus("Color mode and data type are read from loaded scan", ADSCANPB_ERR);
         status = asynError;
-    } else if (function == ADStatus) {
-        if (value == ADStatusIdle) printf("SAW STAT TO IDLE");
     } else if (function == ADScanPB_DataSource) {
         updateImageDatasetDesc((ADScanPBDataSource_t) value);
     } else if (function == ADScanPB_TriggerSignal){
@@ -475,8 +473,8 @@ asynStatus ADScanPB::writeInt32(asynUser *pasynUser, epicsInt32 value) {
             } else{
                 epicsEventSignal(edgeEvent);
             }
-            setIntegerParam(ADScanPB_NumTrigsRecd, (int)numTriggersRecd);
-            setIntegerParam(ADScanPB_NumTrigsDropped, (int)numTriggersDropped);
+            setIntegerParam(ADScanPB_NumTrigsRecd, (int) numTriggersRecd);
+            setIntegerParam(ADScanPB_NumTrigsDropped, (int) numTriggersDropped);
         }
         
     } else {
@@ -494,19 +492,38 @@ asynStatus ADScanPB::writeInt32(asynUser *pasynUser, epicsInt32 value) {
     return status;
 }
 
+/**
+ * @brief Function that updates all playback rate signals based on inputs
+ * 
+ * @param rateFormat Either FPS, acquire period, or exposure time.
+ */
 void ADScanPB::setPlaybackRate(int rateFormat) {
     const char *functionName = "setPlaybackRate";
-    double fps, spf;
+    double fps, spf, exposure;
 
     if (rateFormat == ADScanPB_PlaybackRateFPS) {
         getDoubleParam(rateFormat, &fps);
         spf = 1 / fps;
-        setDoubleParam(ADScanPB_PlaybackRateSPF, spf);
-    } else {
+        setDoubleParam(ADAcquirePeriod, spf);
+        setDoubleParam(ADAcquireTime, spf);
+    } else if(rateFormat == ADAcquirePeriod) {
         getDoubleParam(rateFormat, &spf);
+        getDoubleParam(ADAcquireTime, &exposure);
         fps = 1 / spf;
         setDoubleParam(ADScanPB_PlaybackRateFPS, fps);
+        if(exposure > spf)
+            setDoubleParam(ADAcquireTime, spf);
+    } else {
+        getDoubleParam(rateFormat, &exposure);
+        getDoubleParam(ADAcquirePeriod, &spf);
+        if (exposure > spf) {
+            spf = exposure;
+            fps = 1 / spf;
+            setDoubleParam(ADScanPB_PlaybackRateFPS, fps);
+            setDoubleParam(ADAcquirePeriod, spf);
+        }
     }
+    callParamCallbacks();
     LOG_ARGS("User set playback FPS to %lf, or %lf seconds per frame.", fps, spf);
 }
 
@@ -528,7 +545,7 @@ asynStatus ADScanPB::writeFloat64(asynUser *pasynUser, epicsFloat64 value) {
 
     status = setDoubleParam(function, value);
 
-    if (function == ADScanPB_PlaybackRateFPS || function == ADScanPB_PlaybackRateSPF) {
+    if (function == ADScanPB_PlaybackRateFPS || function == ADAcquirePeriod || function == ADAcquireTime) {
         setPlaybackRate(function);
     } else {
         if (function < ADSCANPB_FIRST_PARAM) {
@@ -703,6 +720,7 @@ asynStatus ADScanPB::openScanTiled(const char *nodePath) {
 }
 #endif
 
+
 asynStatus ADScanPB::openScanHDF5(const char *filePath) {
     const char *functionName = "openScanHDF5";
     asynStatus status = asynSuccess;
@@ -834,12 +852,12 @@ asynStatus ADScanPB::openScanHDF5(const char *filePath) {
 void ADScanPB::updateImageDatasetDesc(ADScanPBDataSource_t dataSource){
     const char* functionName = "updateImageDatasetDesc";
     char imgDatasetDesc[256];
-    if (dataSource == ADSCANPB_DS_HDF5) sprintf(imgDatasetDesc, "Internal path to image dataset");
+    if (dataSource == ADSCANPB_DS_HDF5 || dataSource == ADSCANPB_DS_HDF5_STACK) 
+        sprintf(imgDatasetDesc, "Internal path to image dataset");
     else if (dataSource == ADSCANPB_DS_TIFF) sprintf(imgDatasetDesc, "Match pattern of tiff filenames");
     else if (dataSource == ADSCANPB_DS_JPEG) sprintf(imgDatasetDesc, "Match pattern of jpeg filenames");
     else if (dataSource == ADSCANPB_DS_MP4) sprintf(imgDatasetDesc, "N/A");
     else if (dataSource == ADSCANPB_DS_TILED) sprintf(imgDatasetDesc, "Tiled Metadata URL");
-    else if (dataSource == ADSCANPB_DS_KAFKA) sprintf(imgDatasetDesc, "Kafka Topic");
     setStringParam(ADScanPB_ImageDatasetDesc, imgDatasetDesc);
 }
 
@@ -930,7 +948,6 @@ ADScanPB::ADScanPB(const char *portName, int maxBuffers, size_t maxMemory, int p
     H5Eset_auto(H5E_DEFAULT, NULL, NULL);
 
     createParam(ADScanPB_PlaybackRateFPSString, asynParamFloat64, &ADScanPB_PlaybackRateFPS);
-    createParam(ADScanPB_PlaybackRateSPFString, asynParamFloat64, &ADScanPB_PlaybackRateSPF);
     createParam(ADScanPB_ScanFilePathString, asynParamOctet, &ADScanPB_ScanFilePath);
 #ifdef ADSCANPB_WITH_TILED_SUPPORT
     createParam(ADScanPB_TiledMetadataURLString, asynParamOctet, &ADScanPB_TiledMetadataURL);
@@ -954,7 +971,10 @@ ADScanPB::ADScanPB(const char *portName, int maxBuffers, size_t maxMemory, int p
     createParam(ADScanPB_NumTrigsRecdString, asynParamInt32, &ADScanPB_NumTrigsRecd);
     createParam(ADScanPB_NumTrigsDroppedString, asynParamInt32, &ADScanPB_NumTrigsDropped);
 
-    int supportedDataSources = ADSCANPB_DS_HDF5; // Set Supported data sources to default builtins (HDF5)
+    int supportedDataSources = 0;
+    
+    supportedDataSources = supportedDataSources & ADSCANPB_DS_HDF5; // Set Supported data sources to default builtins (HDF5)
+    //supportedDataSources = supportedDataSources & ADSCANPB_DS_HDF5_STACK;
 
     // Sets driver version PV (version numbers defined in header file)
     char versionString[25];

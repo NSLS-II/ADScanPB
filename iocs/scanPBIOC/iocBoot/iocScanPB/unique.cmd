@@ -9,16 +9,17 @@ epicsEnvSet("ENGINEER",                 "Jakub Wlodek")
 epicsEnvSet("PORT",                     "PB1")
 epicsEnvSet("IOC",                      "iocScanPB")
 
-< /epics/common/xf31id1-ioc1-netsetup.cmd
+< /epics/common/localhost-netsetup.cmd
 
 epicsEnvSet("EPICS_CA_MAX_ARRAY_BYTES", "6000000")
 
 
 # PV and IOC Name configs
-epicsEnvSet("PREFIX",                   "XF:31ID1-ES{Playback-Det:1}")
+epicsEnvSet("PREFIX",                   "DEV:SCANPB:DET1:")
 epicsEnvSet("HOSTNAME",                 "localhost")
 epicsEnvSet("IOCNAME",                  "scanSim")
-epicsEnvSet("TRIGGER_SIGNAL",           "XF:31ID1-ES{PANDA:1}:LUT1:OUT")
+#epicsEnvSet("TRIGGER_SIGNAL",           "XF:31ID1-ES{PANDA:1}:LUT1:OUT")
+epicsEnvSet("TRIGGER_SIGNAL",           "TRIG")
 
 # Imag and data size
 epicsEnvSet("QSIZE",                    "30")
