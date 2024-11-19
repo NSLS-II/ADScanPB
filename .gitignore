@@ -11,6 +11,5 @@ bin/
 *.swp
 envPaths
 autosave/
-cpr/
 autostart.sh
 cprSrc/
