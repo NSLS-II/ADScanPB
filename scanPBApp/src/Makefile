@@ -9,18 +9,14 @@ endif
 
 USR_CPPFLAGS += -std=c++11
 
-ifeq ($(WITH_TILED_SUPPORT), YES)
 USR_CPPFLAGS += -DADSCANPB_WITH_TILED_SUPPORT
-endif
 
 INC += ADScanPB.h
 
 LIBRARY_IOC = ADScanPB 
 LIB_SRCS += ADScanPB.cpp
 
-ifeq ($(WITH_TILED_SUPPORT), YES)
-LIB_SYS_LIBS += cpr curl-d z
-endif
+LIB_SYS_LIBS += cpr curl z
 
 DBD += scanPBSupport.dbd
 
