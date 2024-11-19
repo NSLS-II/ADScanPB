@@ -19,7 +19,7 @@ LIBRARY_IOC = ADScanPB
 LIB_SRCS += ADScanPB.cpp
 
 ifeq ($(WITH_TILED_SUPPORT), YES)
-LIB_SYS_LIBS += cpr curl-d z
+LIB_SYS_LIBS += cpr curl z
 endif
 
 DBD += scanPBSupport.dbd
