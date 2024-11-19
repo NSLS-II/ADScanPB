@@ -577,7 +577,6 @@ void ADScanPB::closeScan() {
     callParamCallbacks();
 }
 
-#ifdef ADSCANPB_WITH_TILED_SUPPORT
 asynStatus ADScanPB::openScanTiled(const char *nodePath) {
     const char *functionName = "openScanTiled";
     asynStatus status = asynSuccess;
@@ -718,7 +717,6 @@ asynStatus ADScanPB::openScanTiled(const char *nodePath) {
     callParamCallbacks();
     return status;
 }
-#endif
 
 
 asynStatus ADScanPB::openScanHDF5(const char *filePath) {
