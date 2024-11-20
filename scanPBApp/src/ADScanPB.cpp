@@ -322,6 +322,17 @@ void ADScanPB::playbackThread() {
         if(trigMode != ADSCANPB_TRIG_EXP_GATE) {
             epicsThreadSleep(spf - playbackTime);
         }
+        else {
+            // if we are in gated exposure mode, wait for opposite edge
+            epicsEventWaitStatus eventRecd = epicsEventWaitError;
+            while (eventRecd != epicsEventWaitOK) {
+                if (trigEdge == ADSCANPB_EDGE_RISING)
+                    eventRecd = epicsEventWaitWithTimeout(this->fallingEdgeEventId, TRIG_TIMEOUT);
+                else
+                    eventRecd = epicsEventWaitWithTimeout(this->risingEdgeEventId, TRIG_TIMEOUT);
+                if(!playback) break;
+            }           
+        }
 
         getIntegerParam(NDArrayCallbacks, &arrayCallbacks);
         if (arrayCallbacks) doCallbacksGenericPointer(pArray, NDArrayData, 0);
@@ -443,11 +454,8 @@ asynStatus ADScanPB::writeInt32(asynUser *pasynUser, epicsInt32 value) {
         setIntegerParam(ADScanPB_PlaybackPos, 0);
     } else if (function == ADImageMode) {
         if (acquiring == 1) acquireStop();
-    } else if (function == NDDataType || function == NDColorMode) {
-        updateStatus("Color mode and data type are read from loaded scan", ADSCANPB_ERR);
-        status = asynError;
     } else if (function == ADScanPB_DataSource) {
-        updateImageDatasetDesc((ADScanPBDataSource_t) value);
+        updateFieldDescriptions((ADScanPBDataSource_t) value);
     } else if (function == ADScanPB_TriggerSignal){
         ADScanPBTrigEdge_t trigEdge;
         getIntegerParam(ADScanPB_TriggerEdge, (int*) &trigEdge);
@@ -499,7 +507,7 @@ asynStatus ADScanPB::writeInt32(asynUser *pasynUser, epicsInt32 value) {
  */
 void ADScanPB::setPlaybackRate(int rateFormat) {
     const char *functionName = "setPlaybackRate";
-    double fps, spf, exposure;
+    double fps, spf;
 
     if (rateFormat == ADScanPB_PlaybackRateFPS) {
         getDoubleParam(rateFormat, &fps);
@@ -508,20 +516,14 @@ void ADScanPB::setPlaybackRate(int rateFormat) {
         setDoubleParam(ADAcquireTime, spf);
     } else if(rateFormat == ADAcquirePeriod) {
         getDoubleParam(rateFormat, &spf);
-        getDoubleParam(ADAcquireTime, &exposure);
         fps = 1 / spf;
         setDoubleParam(ADScanPB_PlaybackRateFPS, fps);
-        if(exposure > spf)
-            setDoubleParam(ADAcquireTime, spf);
+        setDoubleParam(ADAcquireTime, spf);
     } else {
-        getDoubleParam(rateFormat, &exposure);
-        getDoubleParam(ADAcquirePeriod, &spf);
-        if (exposure > spf) {
-            spf = exposure;
-            fps = 1 / spf;
-            setDoubleParam(ADScanPB_PlaybackRateFPS, fps);
-            setDoubleParam(ADAcquirePeriod, spf);
-        }
+        getDoubleParam(rateFormat, &spf);
+        fps = 1 / spf;
+        setDoubleParam(ADScanPB_PlaybackRateFPS, fps);
+        setDoubleParam(ADAcquirePeriod, spf);
     }
     callParamCallbacks();
     LOG_ARGS("User set playback FPS to %lf, or %lf seconds per frame.", fps, spf);
@@ -577,26 +579,27 @@ void ADScanPB::closeScan() {
     callParamCallbacks();
 }
 
-asynStatus ADScanPB::openScanTiled(const char *nodePath) {
+asynStatus ADScanPB::openScanTiled(const char *scanID) {
     const char *functionName = "openScanTiled";
     asynStatus status = asynSuccess;
 
-    char metadataURL[256];
-    getStringParam(ADScanPB_ImageDataset, 256, metadataURL);
-    printf("%s\n", metadataURL);
+    char tiledServerURL[256], metadataURL[512], imageDataset[256], dataPath[256];
+    getStringParam(ADScanPB_TiledServerURL, 256, tiledServerURL);
+    getStringParam(ADScanPB_ExternalPath, 256, dataPath);
+    getStringParam(ADScanPB_ImageDataset, 256, imageDataset);
+    snprintf(metadataURL, 512, "%s/api/v1/metadata/%s/%s/%s", tiledServerURL, dataPath, scanID, imageDataset);
 
-    if (!this->tiledApiKey.empty() && strlen(metadataURL) != 0) this->tiledConfigured = true;
+    if (this->tiledApiKey == NULL)
+        updateStatus("No tiled API key was found!", ADSCANPB_WARN);
 
-    if (!this->tiledConfigured) updateStatus("Tiled configuration incomplete!", ADSCANPB_WARN);
-
-    LOG_ARGS("Attempting to load scan from Tiled node: %s", nodePath);
+    LOG_ARGS("Attempting to load img data from scan w/ ID: %s from %s/%s", scanID, tiledServerURL, dataPath);
 
     cpr::Response r;
-    if (this->tiledApiKey.empty()) {
-        r = cpr::Get(cpr::Url{string(nodePath)});
+    if (this->tiledApiKey == NULL) {
+        r = cpr::Get(cpr::Url{string(metadataURL)});
     } else {
-        cpr::Header auth = cpr::Header{{string("Authorization"), "Apikey " + this->tiledApiKey}};
-        r = cpr::Get(cpr::Url{string(nodePath)}, auth);
+        cpr::Header auth = cpr::Header{{string("Authorization"), "Apikey " + string(this->tiledApiKey)}};
+        r = cpr::Get(cpr::Url{string(metadataURL)}, auth);
     }
 
     if (r.status_code != 200) {
@@ -604,17 +607,17 @@ asynStatus ADScanPB::openScanTiled(const char *nodePath) {
         return asynError;
     }
 
-    cout << r.text << endl;
+    //cout << r.text << endl;
 
     json metadata_j = json::parse(r.text.c_str());
-    json scanShape = metadata_j["data"]["attributes"]["structure"]["macro"]["shape"];
-    int numAcquistions = scanShape[0].get<int>();
-    int numFrames = scanShape[1].get<int>() * numAcquistions;
-    int ySize = scanShape[2].get<int>();
-    int xSize = scanShape[3].get<int>();
-    int bytesPerElem =
-        metadata_j["data"]["attributes"]["structure"]["micro"]["itemsize"].get<int>();
-    json chunks = metadata_j["data"]["attributes"]["structure"]["macro"]["chunks"];
+    json scanShape = metadata_j["data"]["attributes"]["structure"]["shape"];
+    
+    size_t numFrames = scanShape[0].get<size_t>();
+    size_t ySize = scanShape[1].get<size_t>();
+    size_t xSize = scanShape[2].get<size_t>();
+    size_t bytesPerElem =
+        metadata_j["data"]["attributes"]["structure"]["data_type"]["itemsize"].get<size_t>();
+    json chunks = metadata_j["data"]["attributes"]["structure"]["chunks"];
 
     string dataURL = metadata_j["data"]["links"]["block"];
     char *dataURLToken = strtok((char *)dataURL.c_str(), "?");
@@ -638,6 +641,8 @@ asynStatus ADScanPB::openScanTiled(const char *nodePath) {
     setIntegerParam(ADSizeY, ySize);
 
     size_t numElems = numFrames * ySize * xSize;
+    size_t datasetSizeBytes = numElems * bytesPerElem;
+    size_t datasetSizeMB = datasetSizeBytes / 1000000;
 
     if (bytesPerElem == 1) {
         setIntegerParam(NDDataType, NDUInt8);
@@ -652,64 +657,78 @@ asynStatus ADScanPB::openScanTiled(const char *nodePath) {
     callParamCallbacks();
 
     // allocate buffer for image data & read entire scan into it.
-    this->scanImageDataBuffer = calloc(numElems, bytesPerElem);
+    LOG_ARGS("Allocating image buffer of size: %d MB", datasetSizeMB);
+    this->scanImageDataBuffer = calloc(datasetSizeBytes, 1);
 
     int framesLoaded = 0;
 
-    int firstChunkListLen = chunks[0].size();
-    int secondChunkListLen = chunks[1].size();
+    int firstDimChunkSize = chunks[0].size();
+
+    //int secondChunkListLen = chunks[1].size();
     size_t bufferWriteOffset = 0;
-    for (int i = 0; i < firstChunkListLen; i++) {
-        for (int j = 0; j < secondChunkListLen; j++) {
-            int numAcquisitionsPerChunk = chunks[0][i].get<int>();
-            int numFramesPerChunk = chunks[1][j].get<int>();
+    for (int i = 0; i < firstDimChunkSize; i+=1) {
+        //for (int j = 0; j < secondChunkListLen; j++) {
+            //int numAcquisitionsPerChunk = chunks[0][i].get<int>();
+        int numFramesPerChunk = chunks[0][i].get<int>();
+        
 
-            cpr::Header dataHeader;
-            if (this->tiledApiKey.empty()) {
-                dataHeader = cpr::Header{{string("Accept"), string("application/octet-stream")}};
-            } else {
-                dataHeader = cpr::Header{{string("Authorization"), "Apikey " + this->tiledApiKey},
-                                         {string("Accept"), string("application/octet-stream")}};
-            }
-
-            // TODO - Update to use block url read from metadata above
-
-            char fullURLC[512];
-            sprintf(fullURLC, "%s?block=%d,%d,0,0", dataURL.c_str(), i, j);
-            string fullURL = string(fullURLC);
-
-            cout << fullURL << endl;
-            size_t numBytesToCopy =
-                numAcquisitionsPerChunk * numFramesPerChunk * xSize * ySize * bytesPerElem;
-            cout << numBytesToCopy << endl;
-
-            char loadingMsg[256];
-            sprintf(loadingMsg, "Loading chunk %d of %d...", (i * secondChunkListLen + j),
-                    (firstChunkListLen * secondChunkListLen));
-            updateStatus(loadingMsg, ADSCANPB_LOG);
-            callParamCallbacks();
-
-            cpr::Response data = cpr::Get(cpr::Url{fullURL}, cpr::ReserveSize{numBytesToCopy * 2},
-                                          cpr::AcceptEncoding({{}}), dataHeader);
-
-            if (data.status_code != 200) {
-                updateStatus(data.text.c_str(), ADSCANPB_ERR);
-                free(this->scanImageDataBuffer);
-                return asynError;
-            }
-
-            /*cout << data.status_code << endl;
-            cout << data.downloaded_bytes << endl;
-            cout << data.raw_header << endl;*/
-
-            memcpy((void *)((uint8_t *)this->scanImageDataBuffer + bufferWriteOffset),
-                   (void *)data.text.c_str(), numBytesToCopy);
-            framesLoaded = framesLoaded + (numAcquisitionsPerChunk * numFramesPerChunk);
-            setIntegerParam(ADScanPB_NumFramesLoaded, framesLoaded);
-            setDoubleParam(ADScanPB_LoadPercent, 100 * (framesLoaded / numFrames));
-            callParamCallbacks();
-            bufferWriteOffset += numBytesToCopy;
+        cpr::Header dataHeader;
+        if (this->tiledApiKey == NULL) {
+            dataHeader = cpr::Header{{string("Accept"), string("application/octet-stream")}};
+        } else {
+            dataHeader = cpr::Header{{string("Authorization"), "Apikey " + string(this->tiledApiKey)},
+                                     {string("Accept"), string("application/octet-stream")}};
         }
+
+        // TODO - Update to use block url read from metadata above
+
+        char fullURLC[512];
+        sprintf(fullURLC, "%s?block=%d,0,0", dataURL.c_str(), i);
+
+        string fullURL = string(fullURLC);
+
+        LOG_ARGS("%s", fullURL.c_str());
+        size_t numBytesToCopy = numFramesPerChunk * xSize * ySize * bytesPerElem;
+
+        char loadingMsg[256];
+        printf("Dataset of %d %d x %d images, %lu pixels, %lu bytes per image, with %d bytes per pixel.\n\n", numFrames, xSize, ySize, size_t(xSize) * size_t(ySize) * size_t(numFrames), xSize * ySize * bytesPerElem, bytesPerElem);
+        printf("Buffer: %lu, offset %lu\n\n", datasetSizeBytes, bufferWriteOffset);
+        sprintf(loadingMsg, "Loading chunk %d of %d...", i, firstDimChunkSize);
+        // sprintf(loadingMsg, "Loading chunk %d of %d...", (i * secondChunkListLen + j),
+        //         (firstDimChunkSize * secondChunkListLen));
+        updateStatus(loadingMsg, ADSCANPB_LOG);
+        callParamCallbacks();
+
+        cpr::Response data = cpr::Get(cpr::Url{fullURL}, cpr::ReserveSize{numBytesToCopy * 2},
+                                      cpr::AcceptEncoding({{}}), dataHeader);
+
+        if (data.status_code != 200) {
+            updateStatus(data.text.c_str(), ADSCANPB_ERR);
+            free(this->scanImageDataBuffer);
+            return asynError;
+        }
+
+        cout << data.status_code << endl;
+        cout << data.downloaded_bytes << endl;
+        cout << data.raw_header << endl;
+
+        if (data.downloaded_bytes != numBytesToCopy) {
+            char mismatchSizeError[512];
+            snprintf(mismatchSizeError, sizeof(mismatchSizeError), "Recv %lu bytes for chunk %d, expected %lu!", data.downloaded_bytes, i, numBytesToCopy);
+            updateStatus(mismatchSizeError, ADSCANPB_ERR);
+            free(this->scanImageDataBuffer);
+            return asynError;
+        }
+
+        memcpy((void *)((uint8_t *)this->scanImageDataBuffer + bufferWriteOffset),
+               (void *)data.text.c_str(), numBytesToCopy);
+        framesLoaded = framesLoaded + numFramesPerChunk;
+//        framesLoaded = framesLoaded + (numAcquisitionsPerChunk * numFramesPerChunk);
+        setIntegerParam(ADScanPB_NumFramesLoaded, framesLoaded);
+        setDoubleParam(ADScanPB_LoadPercent, 100 * (framesLoaded / numFrames));
+        callParamCallbacks();
+        bufferWriteOffset += numBytesToCopy;
+        //}
     }
 
     updateStatus("Done", ADSCANPB_LOG);
@@ -719,16 +738,20 @@ asynStatus ADScanPB::openScanTiled(const char *nodePath) {
 }
 
 
-asynStatus ADScanPB::openScanHDF5(const char *filePath) {
+asynStatus ADScanPB::openScanHDF5(const char *fileName) {
     const char *functionName = "openScanHDF5";
     asynStatus status = asynSuccess;
 
     hid_t fileId, imageDatasetId, tsDatasetId;
 
-    LOG_ARGS("Attempting to open HDF5 file: %s", filePath);
+    char directoryPath[256], fullFilePath[512];
+    getStringParam(ADScanPB_ExternalPath, 256, (char *)directoryPath);
+    snprintf(fullFilePath, 512, "%s/%s", directoryPath, fileName);
+
+    LOG_ARGS("Attempting to open HDF5 file: %s", fullFilePath);
 
     // Open H5 file and
-    fileId = H5Fopen(filePath, H5F_ACC_RDONLY, H5P_DEFAULT);
+    fileId = H5Fopen(fullFilePath, H5F_ACC_RDONLY, H5P_DEFAULT);
 
     if (fileId < 0) {
         updateStatus("Failed to open HDF5 scan file!", ADSCANPB_ERR);
@@ -847,16 +870,41 @@ asynStatus ADScanPB::openScanHDF5(const char *filePath) {
 }
 
 
-void ADScanPB::updateImageDatasetDesc(ADScanPBDataSource_t dataSource){
-    const char* functionName = "updateImageDatasetDesc";
-    char imgDatasetDesc[256];
-    if (dataSource == ADSCANPB_DS_HDF5 || dataSource == ADSCANPB_DS_HDF5_STACK) 
-        sprintf(imgDatasetDesc, "Internal path to image dataset");
-    else if (dataSource == ADSCANPB_DS_TIFF) sprintf(imgDatasetDesc, "Match pattern of tiff filenames");
-    else if (dataSource == ADSCANPB_DS_JPEG) sprintf(imgDatasetDesc, "Match pattern of jpeg filenames");
-    else if (dataSource == ADSCANPB_DS_MP4) sprintf(imgDatasetDesc, "N/A");
-    else if (dataSource == ADSCANPB_DS_TILED) sprintf(imgDatasetDesc, "Tiled Metadata URL");
-    setStringParam(ADScanPB_ImageDatasetDesc, imgDatasetDesc);
+void ADScanPB::updateFieldDescriptions(ADScanPBDataSource_t dataSource){
+    const char* functionName = "updateFieldDescriptions";
+
+    LOG("Updating input field descriptions...");
+
+    int externalDesc = ADScanPB_ExternalPathDesc;
+    int idDesc = ADScanPB_ScanIDDesc;
+    int datasetDesc = ADScanPB_ImageDatasetDesc;
+    int tsDesc = ADScanPB_TSDatasetDesc;
+    switch(dataSource) {
+        case ADSCANPB_DS_HDF5:
+            setStringParam(externalDesc, "Directory Path");
+            setStringParam(idDesc, "HDF5 Filename");
+            setStringParam(datasetDesc, "Image Dataset");
+            setStringParam(tsDesc, "(Optional) Timestamp Dataset");
+            break;
+        case ADSCANPB_DS_TILED:
+            setStringParam(externalDesc, "Tiled Container");
+            setStringParam(idDesc, "Scan UUID");
+            setStringParam(datasetDesc, "Image Dataset");
+            setStringParam(tsDesc, "(Optional) Timestamp Dataset");
+            break;
+        case ADSCANPB_DS_MP4:
+            setStringParam(externalDesc, "Directory Path");
+            setStringParam(idDesc, "MP4 Filename");
+            setStringParam(datasetDesc, "N/A");
+            setStringParam(tsDesc, "N/A");
+            break;
+        default:
+            setStringParam(externalDesc, "Directory Path");
+            setStringParam(idDesc, "Image Filename Pattern");
+            setStringParam(datasetDesc, "N/A");
+            setStringParam(tsDesc, "N/A");
+            break;
+    }
 }
 
 asynStatus ADScanPB::writeOctet(asynUser *pasynUser, const char *value, size_t nChars,
@@ -872,7 +920,7 @@ asynStatus ADScanPB::writeOctet(asynUser *pasynUser, const char *value, size_t n
     status = (asynStatus)setStringParam(addr, function, (char *)value);
     if (status != asynSuccess) return (status);
 
-    if (function == ADScanPB_ScanFilePath) {
+    if (function == ADScanPB_ScanID) {
         if ((nChars > 0) && (value[0] != 0)) {
             // If we have a scan loaded already, close it out first
             int scanLoaded;
@@ -882,10 +930,8 @@ asynStatus ADScanPB::writeOctet(asynUser *pasynUser, const char *value, size_t n
             int dataSource;
             getIntegerParam(ADScanPB_DataSource, &dataSource);
             if (dataSource == ADSCANPB_DS_HDF5) status = this->openScanHDF5(value);
-#ifdef ADSCANPB_WITH_TILED_SUPPORT
             else if (dataSource == 1)
                 status = this->openScanTiled(value);
-#endif
             else
                 updateStatus("Selected data source not supported in current ADScanPB build!",
                              ADSCANPB_ERR);
@@ -942,18 +988,22 @@ ADScanPB::ADScanPB(const char *portName, int maxBuffers, size_t maxMemory, int p
 
     LOG("Intializing scan playback tool...");
 
-    /* Turn off HDF5 error handling */
+    
+    LOG("Configuring HDF5 library error handling...");
     H5Eset_auto(H5E_DEFAULT, NULL, NULL);
 
     createParam(ADScanPB_PlaybackRateFPSString, asynParamFloat64, &ADScanPB_PlaybackRateFPS);
-    createParam(ADScanPB_ScanFilePathString, asynParamOctet, &ADScanPB_ScanFilePath);
-#ifdef ADSCANPB_WITH_TILED_SUPPORT
-    createParam(ADScanPB_TiledMetadataURLString, asynParamOctet, &ADScanPB_TiledMetadataURL);
-#endif
-    createParam(ADScanPB_DataSourceString, asynParamInt32, &ADScanPB_DataSource);
+    createParam(ADScanPB_ExternalPathString, asynParamOctet, &ADScanPB_ExternalPath);
+    createParam(ADScanPB_ExternalPathDescString, asynParamOctet, &ADScanPB_ExternalPathDesc);
+    createParam(ADScanPB_ScanIDString, asynParamOctet, &ADScanPB_ScanID);
+    createParam(ADScanPB_ScanIDDescString, asynParamOctet, &ADScanPB_ScanIDDesc);
     createParam(ADScanPB_ImageDatasetString, asynParamOctet, &ADScanPB_ImageDataset);
     createParam(ADScanPB_ImageDatasetDescString, asynParamOctet, &ADScanPB_ImageDatasetDesc);
+    createParam(ADScanPB_DatasetSizeString, asynParamOctet, &ADScanPB_DatasetSize);
     createParam(ADScanPB_TSDatasetString, asynParamOctet, &ADScanPB_TSDataset);
+    createParam(ADScanPB_TSDatasetDescString, asynParamOctet, &ADScanPB_TSDatasetDesc);
+    createParam(ADScanPB_TiledServerURLString, asynParamOctet, &ADScanPB_TiledServerURL);
+    createParam(ADScanPB_DataSourceString, asynParamInt32, &ADScanPB_DataSource);
     createParam(ADScanPB_AutoRepeatString, asynParamInt32, &ADScanPB_AutoRepeat);
     createParam(ADScanPB_ScanLoadedString, asynParamInt32, &ADScanPB_ScanLoaded);
     createParam(ADScanPB_PlaybackPosString, asynParamInt32, &ADScanPB_PlaybackPos);
@@ -969,11 +1019,11 @@ ADScanPB::ADScanPB(const char *portName, int maxBuffers, size_t maxMemory, int p
     createParam(ADScanPB_NumTrigsRecdString, asynParamInt32, &ADScanPB_NumTrigsRecd);
     createParam(ADScanPB_NumTrigsDroppedString, asynParamInt32, &ADScanPB_NumTrigsDropped);
 
+    LOG("Identifying supported data sources...");
     int supportedDataSources = 0;
-    
-    supportedDataSources = supportedDataSources & ADSCANPB_DS_HDF5; // Set Supported data sources to default builtins (HDF5)
-    //supportedDataSources = supportedDataSources & ADSCANPB_DS_HDF5_STACK;
+    supportedDataSources = supportedDataSources & int(pow(2, int(ADSCANPB_DS_HDF5))) & int(pow(2, int(ADSCANPB_DS_TILED))); 
 
+    LOG("Updating version numbers...");
     // Sets driver version PV (version numbers defined in header file)
     char versionString[25];
     epicsSnprintf(versionString, sizeof(versionString), "%d.%d.%d", ADSCANPB_VERSION,
@@ -990,30 +1040,20 @@ ADScanPB::ADScanPB(const char *portName, int maxBuffers, size_t maxMemory, int p
     setStringParam(ADFirmwareVersion, "N/A");
     setStringParam(ADSerialNumber, "N/A");
 
-#ifdef ADSCANPB_WITH_TILED_SUPPORT
+    LOG("Reading tiled api key and sever from environment...");
+    // Load tiled api key and server url from env vars.
+    this->tiledApiKey = getenv("TILED_API_KEY");
 
-    supportedDataSources = supportedDataSources & ADSCANPB_DS_TILED;
-
-    char metadataURL[256];
-
-    // Load Tiled api key from env vars.
-    if (getenv("TILED_API_KEY") != NULL) this->tiledApiKey = string(getenv("TILED_API_KEY"));
-
-    if (getenv("TILED_METADATA_URL") != NULL)
-        setStringParam(ADScanPB_ImageDataset, getenv("TILED_METADATA_URL"));
-
-    getStringParam(ADScanPB_TiledMetadataURL, 256, metadataURL);
-
-    // If all required tiled env vars are set, allow for opening data via tiled
-    if (!this->tiledApiKey.empty() && strlen(metadataURL) != 0) this->tiledConfigured = true;
-#endif
+    if (getenv("TILED_SERVER_URL") != NULL)
+        setStringParam(ADScanPB_TiledServerURL, getenv("TILED_SERVER_URL"));
+    else ERR("Tiled server url environment variable unset!");
 
     setIntegerParam(ADScanPB_SupportedSources, supportedDataSources);
 
     int dataSource;
     getIntegerParam(ADScanPB_DataSource, &dataSource);
 
-    updateImageDatasetDesc((ADScanPBDataSource_t) dataSource);
+    updateFieldDescriptions((ADScanPBDataSource_t) dataSource);
 
     // create events for rising/falling edge triggers
     this->risingEdgeEventId = epicsEventCreate(epicsEventEmpty);

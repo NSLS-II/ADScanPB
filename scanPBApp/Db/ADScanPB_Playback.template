@@ -1,0 +1,57 @@
+
+record(ao, "$(P)$(R)PlaybackRateFPS"){
+    field(PINI, "YES")
+    field(DTYP, "asynFloat64")
+    field(VAL, "5")
+    field(OUT,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PLAYBACK_RATE_FPS")
+}
+
+record(ai, "$(P)$(R)PlaybackRateFPS_RBV"){
+    field(DTYP, "asynFloat64")
+    field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PLAYBACK_RATE_FPS")
+    field(SCAN, "I/O Intr")
+}
+
+
+record(bo, "$(P)$(R)AutoRepeat")
+{
+    field(PINI, "YES")
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))AUTO_REPEAT")
+    field(VAL,  "1")
+    field(ZNAM, "No")
+    field(ONAM, "Yes")
+    info(autosaveFields, "VAL")
+}
+
+record(bi, "$(P)$(R)AutoRepeat_RBV")
+{
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))AUTO_REPEAT")
+    field(ZNAM, "No")
+    field(ONAM, "Yes")
+    field(SCAN, "I/O Intr")
+}
+
+record(ao, "$(P)$(R)PlaybackPosition"){
+    field(PINI, "YES")
+    field(DTYP, "asynInt32")
+    field(VAL, "0")
+    field(OUT,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PLAYBACK_POS")
+}
+
+record(ai, "$(P)$(R)PlaybackPosition_RBV"){
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PLAYBACK_POS")
+    field(SCAN, "I/O Intr")
+}
+
+
+record(bo, "$(P)$(R)ResetPlaybackPosition")
+{
+    field(PINI, "YES")
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))RESET_PLAYBACK_POS")
+    field(VAL,  "0")
+}
+

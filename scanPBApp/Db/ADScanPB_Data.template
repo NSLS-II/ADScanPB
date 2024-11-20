@@ -1,0 +1,198 @@
+record(ai, "$(P)$(R)SupportedSources_RBV"){
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))SUPPORTED_SOURCES")
+    field(SCAN, "I/O Intr")
+}
+
+record(waveform, "$(P)$(R)ExternalPath")
+{
+    field(PINI, "YES")
+    field(DTYP, "asynOctetWrite")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))EXTERNAL_PATH")
+    field(FTVL, "CHAR")
+    field(NELM, "256")
+    info(autosaveFields, "VAL")
+}
+
+record(waveform, "$(P)$(R)ExternalPath_RBV")
+{
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))EXTERNAL_PATH")
+    field(FTVL, "CHAR")
+    field(NELM, "256")
+    field(SCAN, "I/O Intr")
+}
+
+record(waveform, "$(P)$(R)ExternalPathDesc_RBV")
+{
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))EXTERNAL_PATH_DESC")
+    field(FTVL, "CHAR")
+    field(NELM, "256")
+    field(SCAN, "I/O Intr")
+}
+
+record(waveform, "$(P)$(R)ScanID")
+{
+    field(PINI, "YES")
+    field(DTYP, "asynOctetWrite")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))SCAN_ID")
+    field(FTVL, "CHAR")
+    field(NELM, "256")
+    info(autosaveFields, "VAL")
+}
+
+record(waveform, "$(P)$(R)ScanID_RBV")
+{
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))SCAN_ID")
+    field(FTVL, "CHAR")
+    field(NELM, "256")
+    field(SCAN, "I/O Intr")
+}
+
+record(waveform, "$(P)$(R)ScanIDDesc_RBV")
+{
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))SCAN_ID_DESC")
+    field(FTVL, "CHAR")
+    field(NELM, "256")
+    field(SCAN, "I/O Intr")
+}
+
+record(waveform, "$(P)$(R)ImageDataset")
+{
+    field(PINI, "YES")
+    field(DTYP, "asynOctetWrite")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))IMAGE_DATASET")
+    field(FTVL, "CHAR")
+    field(NELM, "256")
+    info(autosaveFields, "VAL")
+}
+
+record(waveform, "$(P)$(R)ImageDataset_RBV")
+{
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))IMAGE_DATASET")
+    field(FTVL, "CHAR")
+    field(NELM, "256")
+    field(SCAN, "I/O Intr")
+}
+
+record(waveform, "$(P)$(R)ImageDatasetDesc_RBV")
+{
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))IMAGE_DATASET_DESC")
+    field(FTVL, "CHAR")
+    field(NELM, "256")
+    field(SCAN, "I/O Intr")
+}
+
+record(stringin, "$(P)$(R)DatasetSize_RBV")
+{
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))DATASET_SIZE")
+    field(SCAN, "I/O Intr")
+}
+
+
+
+record(mbbo, "$(P)$(R)DataSource")
+{
+    field(PINI, "YES")
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))DATA_SOURCE")
+    field(VAL,  "0")
+    field(ZRST, "HDF5")
+    field(ZRVL, "0")
+    field(ONST, "Tiled")
+    field(ONVL, "1")
+    field(TWST, "TIFF")
+    field(TWVL, "2")
+    field(THST, "JPEG")
+    field(THVL, "3")
+    field(FRST, "MP4")
+    field(FRVL, "4")
+    info(autosaveFields, "VAL")
+}
+
+record(mbbi, "$(P)$(R)DataSource_RBV")
+{
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))DATA_SOURCE")
+    field(VAL,  "0")
+    field(ZRST, "HDF5")
+    field(ZRVL, "0")
+    field(ONST, "Tiled")
+    field(ONVL, "1")
+    field(TWST, "TIFF")
+    field(TWVL, "2")
+    field(THST, "JPEG")
+    field(THVL, "3")
+    field(FRST, "MP4")
+    field(FRVL, "4")
+    field(SCAN, "I/O Intr")
+}
+
+
+record(ai, "$(P)$(R)NumFramesLoaded_RBV"){
+    field(DTYP, "asynInt32")
+    field(VAL, "0")
+    field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))NUM_FRAMES_LOADED")
+    field(SCAN, "I/O Intr")
+}
+
+
+record(ai, "$(P)$(R)LoadPercent_RBV"){
+    field(DTYP, "asynFloat64")
+    field(VAL, "0")
+    field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))PERCENT_LOADED")
+    field(EGU, "%")
+    field(SCAN, "I/O Intr")
+}
+
+record(waveform, "$(P)$(R)TSDataset")
+{
+    field(PINI, "YES")
+    field(DTYP, "asynOctetWrite")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))TS_DATASET")
+    field(FTVL, "CHAR")
+    field(NELM, "256")
+    info(autosaveFields, "VAL")
+}
+
+record(waveform, "$(P)$(R)TSDataset_RBV")
+{
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))TS_DATASET")
+    field(FTVL, "CHAR")
+    field(NELM, "256")
+    field(SCAN, "I/O Intr")
+}
+
+record(waveform, "$(P)$(R)TSDatasetDesc_RBV")
+{
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))TS_DATASET_DESC")
+    field(FTVL, "CHAR")
+    field(NELM, "256")
+    field(SCAN, "I/O Intr")
+}
+
+record(bi, "$(P)$(R)ScanLoaded_RBV")
+{
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),$(ADDR=0),$(TIMEOUT=1))SCAN_LOADED")
+    field(ZNAM, "No")
+    field(ONAM, "Yes")
+    field(SCAN, "I/O Intr")
+}
+
+
+record(ai, "$(P)$(R)NumFrames_RBV"){
+    field(DTYP, "asynInt32")
+    field(VAL, "0")
+    field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))NUM_FRAMES")
+    field(SCAN, "I/O Intr")
+}
+

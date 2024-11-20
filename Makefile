@@ -5,10 +5,8 @@ DIRS := $(DIRS) configure
 DIRS := $(DIRS) scanPBApp
 
 # To allow for playback from tiled sources, 
-ifeq ($(WITH_TILED_SUPPORT), YES)
 DIRS := $(DIRS) scanPBSupport
 scanPBApp_DEPEND_DIRS += scanPBSupport
-endif
 
 ifeq ($(BUILD_IOCS), YES)
 DIRS := $(DIRS) $(filter-out $(DIRS), $(wildcard iocs))

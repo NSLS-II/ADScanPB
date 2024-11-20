@@ -15,11 +15,11 @@ epicsEnvSet("EPICS_CA_MAX_ARRAY_BYTES", "6000000")
 
 
 # PV and IOC Name configs
-epicsEnvSet("PREFIX",                   "DEV:SCANPB:DET1:")
+epicsEnvSet("PREFIX",                   "XF:31ID1-ES{Scan-PB:1}")
 epicsEnvSet("HOSTNAME",                 "localhost")
 epicsEnvSet("IOCNAME",                  "scanSim")
 #epicsEnvSet("TRIGGER_SIGNAL",           "XF:31ID1-ES{PANDA:1}:LUT1:OUT")
-epicsEnvSet("TRIGGER_SIGNAL",           "TRIG")
+epicsEnvSet("TRIGGER_SIGNAL",           "XF:31ID1-ES{SANDBOX:1}Clock")
 
 # Imag and data size
 epicsEnvSet("QSIZE",                    "30")

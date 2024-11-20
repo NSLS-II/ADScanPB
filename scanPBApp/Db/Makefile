@@ -11,12 +11,11 @@ include $(TOP)/configure/CONFIG
 # Create and install (or just install) 
 # databases, templates, subtitutions
 DB += ADScanPB.template
-DB += ADScanPBTrig.template
+DB += ADScanPB_Data.template
+DB += ADScanPB_Playback.template
+DB += ADScanPB_Tiled.template
+DB += ADScanPB_Trig.template
 DB += ADScanPB_settings.req
-
-ifeq ($(WITH_TILED_SUPPORT), YES)
-DB += ADScanPBTiled.template
-endif
 
 #-------------------------------------------
 # If <anyname>.db template is not named <anyname>*.template add

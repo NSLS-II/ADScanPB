@@ -32,19 +32,29 @@ typedef enum ADScanPBErr {
 
 // Place PV string definitions here
 #define ADScanPB_PlaybackRateFPSString "PLAYBACK_RATE_FPS"  //
-#define ADScanPB_PlaybackRateSPFString "PLAYBACK_RATE_SPF"  //
-#define ADScanPB_ScanFilePathString "SCAN_FILE_PATH"        //
 
-#ifdef ADSCANPB_WITH_TILED_SUPPORT
-#define ADScanPB_TiledMetadataURLString "TILED_METADATA_URL"
-#endif
+#define ADScanPB_DataSourceString "DATA_SOURCE"
+
+#define ADScanPB_ExternalPathString "EXTERNAL_PATH"        //
+#define ADScanPB_ExternalPathDescString "EXTERNAL_PATH_DESC"        //
+
+#define ADScanPB_ScanIDString "SCAN_ID"
+#define ADScanPB_ScanIDDescString "SCAN_ID_DESC"  //
+
+#define ADScanPB_ImageDatasetString "IMAGE_DATASET"
+#define ADScanPB_ImageDatasetDescString "IMAGE_DATASET_DESC"
+
+#define ADScanPB_DatasetSizeString "DATASET_SIZE"
+
+#define ADScanPB_TSDatasetString "TS_DATASET"        //
+#define ADScanPB_TSDatasetDescString "TS_DATASET_DESC"        //
+
+
+#define ADScanPB_TiledServerURLString "TILED_SERVER_URL"
+
 
 #define ADScanPB_TriggerEdgeString "TRIG_EDGE"
 #define ADScanPB_TriggerSignalString "TRIG_SIGNAL"
-#define ADScanPB_DataSourceString "DATA_SOURCE"
-#define ADScanPB_ImageDatasetString "IMAGE_DATASET"  //
-#define ADScanPB_ImageDatasetDescString "IMAGE_DATASET_DESC"  //
-#define ADScanPB_TSDatasetString "TS_DATASET"        //
 #define ADScanPB_AutoRepeatString "AUTO_REPEAT"      //
 #define ADScanPB_ScanLoadedString "SCAN_LOADED"      //
 #define ADScanPB_PlaybackPosString "PLAYBACK_POS"
@@ -68,7 +78,6 @@ typedef enum ADScanPBErr {
 
 #include "ADDriver.h"
 
-#ifdef ADSCANPB_WITH_TILED_SUPPORT
 #include <string>
 
 #include "cpr/cpr.h"
@@ -76,7 +85,6 @@ typedef enum ADScanPBErr {
 using namespace std;
 
 using json = nlohmann::json;
-#endif
 
 typedef enum {
     ADSCANPB_TRIG_INTERNAL = 0, // Purely software trigger
@@ -88,12 +96,11 @@ typedef enum {
 typedef enum { ADSCANPB_EDGE_RISING = 0, ADSCANPB_EDGE_FALLING = 1 } ADScanPBTrigEdge_t;
 
 typedef enum {
-    ADSCANPB_DS_HDF5 = 1,
-    ADSCANPB_DS_HDF5_STACK = 2,
-    ADSCANPB_DS_TIFF = 4,
-    ADSCANPB_DS_JPEG = 8,
-    ADSCANPB_DS_MP4 = 16,
-    ADSCANPB_DS_TILED = 32,
+    ADSCANPB_DS_HDF5 = 0,
+    ADSCANPB_DS_TILED = 1,
+    ADSCANPB_DS_TIFF_STACK = 2,
+    ADSCANPB_DS_JPEG_STACK = 3,
+    ADSCANPB_DS_MP4 = 4,
 } ADScanPBDataSource_t;
 
 typedef enum {
@@ -139,19 +146,19 @@ class ADScanPB : ADDriver {
    protected:
     int ADScanPB_PlaybackRateFPS;
 #define ADSCANPB_FIRST_PARAM ADScanPB_PlaybackRateFPS
-    int ADScanPB_PlaybackRateSPF;
-    int ADScanPB_ScanFilePath;
-
-#ifdef ADSCANPB_WITH_TILED_SUPPORT
-    int ADScanPB_TiledMetadataURL;
-#endif
-
+    int ADScanPB_ExternalPath;
+    int ADScanPB_ExternalPathDesc;
+    int ADScanPB_ScanID;
+    int ADScanPB_ScanIDDesc;
+    int ADScanPB_ImageDataset;
+    int ADScanPB_ImageDatasetDesc;
+    int ADScanPB_DatasetSize;
+    int ADScanPB_TSDataset;
+    int ADScanPB_TSDatasetDesc;
+    int ADScanPB_TiledServerURL;
     int ADScanPB_TriggerSignal;
     int ADScanPB_TriggerEdge;
     int ADScanPB_DataSource;
-    int ADScanPB_ImageDataset;
-    int ADScanPB_ImageDatasetDesc;
-    int ADScanPB_TSDataset;
     int ADScanPB_AutoRepeat;
     int ADScanPB_ScanLoaded;
     int ADScanPB_PlaybackPos;
@@ -172,10 +179,7 @@ class ADScanPB : ADDriver {
     epicsEventId fallingEdgeEventId;
     bool waitingForTriggerEvent = false;
 
-#ifdef ADSCANPB_WITH_TILED_SUPPORT
-    string tiledApiKey;
-    bool tiledConfigured = false;
-#endif
+    char* tiledApiKey;
 
     void *scanImageDataBuffer;
     void *scanTimestampDataBuffer;
@@ -194,7 +198,7 @@ class ADScanPB : ADDriver {
     // writes to ADStatus PV
     void updateStatus(const char *status, ADScanPBErr_t errLevel);
 
-    void updateImageDatasetDesc(ADScanPBDataSource_t dataSource);
+    void updateFieldDescriptions(ADScanPBDataSource_t dataSource);
 
     // ----------------------------------------
     // ScanPB Functions - Scan Load Functions
@@ -204,9 +208,7 @@ class ADScanPB : ADDriver {
     // asynStatus openScanImageSeries(const char *filePath, ADScanPBImageFormat_t format);
     // asynStatus openScanMP4(const char *filePath);
 
-#ifdef ADSCANPB_WITH_TILED_SUPPORT
     asynStatus openScanTiled(const char *nodePath);
-#endif
 
     void closeScan();
 
